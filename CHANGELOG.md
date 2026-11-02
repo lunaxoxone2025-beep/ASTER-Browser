@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.1] - 2026-11-02
+### Changed
+- Refined ASTER's visual identity with a warm amber accent inspired by modern privacy-focused browsers.
+- Kept ASTER's own name, iconography, and layout rather than copying another browser's branding.
+
+
 ## [0.6.0] - 2026-11-02
 ### Changed
 - Redesigned the Android browser chrome with a compact ASTER brand header.
