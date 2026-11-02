@@ -1,13 +1,15 @@
-# ASTER Browser — Android MVP 0.4.1
+# ASTER Browser — Android MVP 0.5.0
 
-ASTER Browser es un prototipo de navegador Android con identidad visual propia. Esta versión incorpora una página de inicio interna, un icono de aplicación y ajustes para Android 15.
+ASTER Browser es un prototipo de navegador Android con identidad visual propia. Esta versión mejora el uso de recursos de las pestañas: las pestañas inactivas se pausan y el límite se establece en ocho para reducir trabajo en segundo plano. Mantiene la página de inicio ASTER y la compatibilidad con Android 15.
 
 ## Funciones
 - Página de inicio ASTER con buscador, accesos rápidos y marcadores recientes.
 - Buscador configurable: Google, DuckDuckGo o Bing.
 - Página de inicio web configurable mediante el botón de inicio.
 - Atrás, adelante, inicio y recarga.
-- Hasta 12 pestañas, con selector y cierre.
+- Hasta 8 pestañas, con selector y cierre.
+- Pausa de WebViews inactivos al cambiar de pestaña y al enviar la app a segundo plano.
+- Renderizado previo fuera de pantalla desactivado para evitar trabajo gráfico innecesario.
 - Restauración de pestañas y página activa al volver a abrir la aplicación.
 - Barra de progreso de carga.
 - Descargas con confirmación, notificación y acceso al gestor de descargas de Android.
@@ -35,7 +37,12 @@ ASTER Browser es un prototipo de navegador Android con identidad visual propia. 
 - La versión actual es Android. La versión de escritorio se desarrollará en una fase posterior.
 - Es un MVP en desarrollo; hace falta probarlo en dispositivos reales antes de considerarlo estable.
 
+## Descargar e instalar el APK
+- Descarga directa: [ASTER Browser 0.5.0 APK](https://github.com/lunaxoxone2025-beep/ASTER-Browser/releases/download/v0.5.0/app-debug.apk), cuando la publicación de la compilación haya terminado.
+- También se conserva el artefacto `ASTER-Browser-debug` en GitHub Actions, que se descarga como ZIP y contiene `app-debug.apk`.
+- En Android, abre el APK descargado y autoriza la instalación desde esa fuente si el sistema lo solicita.
+
 ## Compilar el APK
 1. Abre la pestaña **Actions** del repositorio.
 2. Selecciona el workflow **Build ASTER Android APK**.
-3. Descarga el artefacto **ASTER-Browser-debug** cuando el trabajo termine correctamente.
+3. Cuando termine correctamente, descarga el APK desde la sección Releases o el artefacto de Actions.
