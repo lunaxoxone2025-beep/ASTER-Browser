@@ -1,6 +1,6 @@
 # ASTER Browser — Android MVP 0.1.0
 
-Primer prototipo nativo Android de ASTER Browser. Utiliza Android WebView como motor de renderizado; no es un motor web independiente.
+Prototipo nativo Android de ASTER Browser, actualizado a la versión 0.2. Utiliza Android WebView como motor de renderizado; no es un motor web independiente.
 
 ## Funciones incluidas
 - Navegación web mediante HTTPS.
@@ -13,6 +13,7 @@ Primer prototipo nativo Android de ASTER Browser. Utiliza Android WebView como m
 ## Limitaciones de esta beta
 - Es un MVP: todavía no incluye gestor de descargas, modo incógnito real, sincronización, bloqueo avanzado de rastreadores ni sincronización de pestañas.
 - La lista de pestañas es básica y no persiste al cerrar la aplicación.
+- Las descargas usan el gestor nativo de Android y se guardan en la carpeta Descargas.
 - Android WebView usa el componente web del sistema Android.
 - Este proyecto compila un APK Android. La versión de escritorio se desarrollará después reutilizando el diseño y la lógica de interfaz con un contenedor de escritorio.
 
