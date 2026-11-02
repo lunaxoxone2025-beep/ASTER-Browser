@@ -323,32 +323,37 @@ public class MainActivity extends Activity {
         StringBuilder html = new StringBuilder();
         html.append("<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>");
         html.append("<title>ASTER Home</title><style>");
-        html.append("*{box-sizing:border-box}body{margin:0;background:#0f1117;color:#f1f4fa;font-family:Arial,sans-serif}");
-        html.append(".wrap{max-width:720px;margin:0 auto;padding:48px 22px 36px}.mark{color:#8b9aff;font-size:14px;font-weight:700;letter-spacing:3px}");
-        html.append("h1{font-size:42px;margin:18px 0 8px;letter-spacing:-1.5px}.sub{color:#9aa4ba;font-size:15px;margin-bottom:30px}");
-        html.append("form{display:flex;gap:8px;background:#1b1f2a;border:1px solid #303749;border-radius:16px;padding:7px}");
-        html.append("input{min-width:0;flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:16px;padding:10px}");
-        html.append("button{border:0;border-radius:11px;padding:0 17px;background:#8191ff;color:#101321;font-weight:700;font-size:14px}");
-        html.append("h2{font-size:13px;color:#9aa4ba;letter-spacing:1.5px;text-transform:uppercase;margin:34px 0 14px}");
-        html.append(".grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}");
-        html.append(".card{display:block;text-decoration:none;color:#e9edfa;background:#1b1f2a;border:1px solid #292f3e;border-radius:14px;padding:16px 12px;font-size:14px}");
-        html.append(".card span{display:block;color:#8792aa;font-size:11px;margin-top:6px;overflow-wrap:anywhere}");
-        html.append(".empty{color:#8792aa;font-size:13px;padding:14px 0}.foot{color:#69748c;font-size:11px;margin-top:38px}");
-        html.append("@media(max-width:420px){.wrap{padding:34px 16px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}h1{font-size:36px}}");
+        html.append("*{box-sizing:border-box}body{margin:0;background:#10131b;color:#f4f6fc;font-family:Arial,sans-serif}");
+        html.append(".wrap{max-width:760px;margin:0 auto;padding:30px 20px 42px}.brand{display:flex;align-items:center;gap:10px;color:#a9b5ff;font-size:13px;font-weight:800;letter-spacing:2.4px}");
+        html.append(".orb{width:34px;height:34px;border-radius:12px;background:linear-gradient(145deg,#a5b0ff,#6478ed);display:grid;place-items:center;color:#111522;font-size:19px;box-shadow:0 6px 24px #7588ff33}");
+        html.append(".hero{padding:34px 0 26px}h1{font-size:38px;line-height:1.08;margin:0 0 10px;letter-spacing:-1.5px}.sub{color:#a0a9bd;font-size:14px;line-height:1.5;margin-bottom:24px}");
+        html.append(".searchbox{display:flex;gap:8px;background:#202532;border:1px solid #343d50;border-radius:18px;padding:7px;box-shadow:0 12px 35px #0003}");
+        html.append("input{min-width:0;flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:16px;padding:11px 12px}");
+        html.append("button{border:0;border-radius:13px;padding:0 18px;background:#a6b1ff;color:#111522;font-weight:800;font-size:14px}");
+        html.append(".privacy{display:flex;align-items:center;gap:10px;margin-top:16px;padding:13px 15px;border:1px solid #303849;border-radius:14px;background:#171c27;color:#aeb8cc;font-size:12px}.dot{width:8px;height:8px;border-radius:50%;background:#9eafff;box-shadow:0 0 12px #9eafff88}");
+        html.append("h2{font-size:12px;color:#9ea9bf;letter-spacing:1.8px;text-transform:uppercase;margin:30px 0 13px}");
+        html.append(".grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}");
+        html.append(".card{display:flex;align-items:center;gap:12px;min-height:72px;text-decoration:none;color:#edf0fa;background:#1c222f;border:1px solid #2b3445;border-radius:16px;padding:13px;font-size:14px;transition:background .15s,border-color .15s}");
+        html.append(".card:active{background:#293248;border-color:#7183ed}.site-icon{flex:0 0 38px;height:38px;border-radius:12px;background:#30394d;color:#b7c2ff;display:grid;place-items:center;font-size:17px;font-weight:800}");
+        html.append(".card span{display:block;color:#929db2;font-size:11px;margin-top:4px;overflow-wrap:anywhere}.empty{color:#8792aa;font-size:13px;padding:14px 0}");
+        html.append(".foot{color:#68748b;font-size:11px;margin-top:34px;border-top:1px solid #252c39;padding-top:18px}");
+        html.append("@media(max-width:420px){.wrap{padding:24px 16px 34px}.hero{padding-top:28px}h1{font-size:34px}.card{padding:11px;gap:9px}.site-icon{flex-basis:34px;height:34px}}");
         html.append("</style></head><body><main class='wrap'>");
-        html.append("<div class='mark'>✳ ASTER BROWSER</div><h1>Your space on the web.</h1>");
-        html.append("<div class='sub'>A fresh start. Pick up where you want to go.</div>");
-        html.append("<form method='get' action='").append(searchAction).append("'>");
+        html.append("<div class='brand'><div class='orb'>✦</div> ASTER BROWSER</div>");
+        html.append("<section class='hero'><h1>A better way<br>to explore.</h1>");
+        html.append("<div class='sub'>A calmer, cleaner space for everything you do online.</div>");
+        html.append("<form class='searchbox' method='get' action='").append(searchAction).append("'>");
         html.append("<input name='q' type='search' placeholder='Search or enter a question' autocomplete='off' aria-label='Search the web'>");
         html.append("<button type='submit'>Search</button></form>");
-        html.append("<h2>Quick access</h2><div class='grid'>");
+        html.append("<div class='privacy'><i class='dot'></i><div><b>Privacy basics are on</b><br>Third-party cookies are disabled in ASTER.</div></div></section>");
+        html.append("<h2>Your shortcuts</h2><div class='grid'>");
         appendStartCard(html, "Google", "Search the web", "https://www.google.com");
         appendStartCard(html, "YouTube", "Watch videos", "https://www.youtube.com");
         appendStartCard(html, "Wikipedia", "Explore knowledge", "https://www.wikipedia.org");
         appendStartCard(html, "GitHub", "Build something", "https://github.com");
         appendStartCard(html, "Reddit", "Join communities", "https://www.reddit.com");
         appendStartCard(html, "DuckDuckGo", "Private search", "https://duckduckgo.com");
-        html.append("</div><h2>Your bookmarks</h2><div class='grid'>");
+        html.append("</div><h2>Saved pages</h2><div class='grid'>");
 
         List<String> saved = new ArrayList<>();
         for (String line : prefs.getString("bookmarks", "").split("\\n")) {
@@ -366,14 +371,16 @@ public class MainActivity extends Activity {
                     .append(escapeHtml(url)).append("</span></a>");
             }
         }
-        html.append("</div><div class='foot'>ASTER Browser · Your browsing, your way.</div></main></body></html>");
+        html.append("</div><div class='foot'>ASTER Browser · Built for your everyday web.</div></main></body></html>");
         target.setTag(HOME_PAGE);
         target.loadDataWithBaseURL("https://aster.start/", html.toString(), "text/html", "UTF-8", null);
     }
 
     private void appendStartCard(StringBuilder html, String title, String subtitle, String url) {
-        html.append("<a class='card' href='").append(url).append("'>")
-            .append(title).append("<span>").append(subtitle).append("</span></a>");
+        String icon = title.isEmpty() ? "•" : title.substring(0, 1).toUpperCase();
+        html.append("<a class='card' href='").append(url).append("'><b class='site-icon'>")
+            .append(icon).append("</b><div>").append(title).append("<span>")
+            .append(subtitle).append("</span></div></a>");
     }
 
     private String escapeHtml(String value) {
