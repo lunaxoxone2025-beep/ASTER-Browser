@@ -93,6 +93,18 @@ public class MainActivity extends Activity {
         return v;
     }
 
+    private TextView chromeButton(String label, int size, String description) {
+        TextView v = button(label, size);
+        v.setTypeface(Typeface.DEFAULT_BOLD);
+        v.setMinWidth(dp(44));
+        v.setMinHeight(dp(44));
+        v.setBackground(rounded(PANEL, 16));
+        v.setContentDescription(description);
+        v.setClickable(true);
+        v.setFocusable(true);
+        return v;
+    }
+
     private void buildUi() {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -112,24 +124,42 @@ public class MainActivity extends Activity {
 
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(dp(16), dp(10), dp(16), dp(8));
+        top.setPadding(dp(16), dp(8), dp(16), dp(8));
 
-        TextView brand = button("✳  ASTER", 19);
+        LinearLayout brandGroup = new LinearLayout(this);
+        brandGroup.setOrientation(LinearLayout.VERTICAL);
+        brandGroup.setGravity(Gravity.CENTER_VERTICAL);
+        TextView brand = button("ASTER", 18);
         brand.setTypeface(Typeface.DEFAULT_BOLD);
         brand.setTextColor(ACCENT);
-        brand.setContentDescription("ASTER Browser");
-        top.addView(brand, new LinearLayout.LayoutParams(0, dp(48), 1));
+        brand.setPadding(0, 0, 0, 0);
+        TextView brandSub = button("BROWSER", 9);
+        brandSub.setTextColor(MUTED);
+        brandSub.setLetterSpacing(0.18f);
+        brandSub.setPadding(0, 0, 0, 0);
+        brandGroup.addView(brand);
+        brandGroup.addView(brandSub);
+        top.addView(brandGroup, new LinearLayout.LayoutParams(0, dp(48), 1));
 
-        tabCount = button("1", 14);
-        tabCount.setBackground(rounded(PANEL, 18));
-        tabCount.setContentDescription("Open tab switcher");
-        top.addView(tabCount, new LinearLayout.LayoutParams(dp(44), dp(38)));
+        tabCount = chromeButton("▢ 1", 14, "Open tab switcher");
+        tabCount.setPadding(dp(10), 0, dp(10), 0);
         tabCount.setOnClickListener(v -> showTabs());
+        top.addView(tabCount, new LinearLayout.LayoutParams(-2, dp(42)));
         root.addView(top);
 
         toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.setPadding(dp(12), dp(4), dp(12), dp(10));
+
+        TextView privacy = chromeButton("◈", 19, "ASTER privacy information");
+        privacy.setTextColor(ACCENT);
+        LinearLayout.LayoutParams privacyParams = new LinearLayout.LayoutParams(dp(44), dp(48));
+        privacyParams.rightMargin = dp(8);
+        toolbar.addView(privacy, privacyParams);
+        privacy.setOnClickListener(v -> new AlertDialog.Builder(this)
+            .setTitle("ASTER protection")
+            .setMessage("ASTER blocks mixed insecure content and disables third-party cookies. Advanced tracker blocking is planned for a future version.")
+            .setPositiveButton("Got it", null).show());
 
         address = new EditText(this);
         address.setSingleLine(true);
@@ -138,10 +168,11 @@ public class MainActivity extends Activity {
         address.setHintTextColor(MUTED);
         address.setHint("Search or enter address");
         address.setContentDescription("Search or enter a web address");
-        address.setPadding(dp(16), 0, dp(12), 0);
+        address.setPadding(dp(14), 0, dp(10), 0);
         address.setSelectAllOnFocus(true);
-        address.setBackground(rounded(PANEL, 24));
+        address.setBackground(rounded(PANEL, 18));
         address.setImeOptions(EditorInfo.IME_ACTION_GO);
+        address.setMinHeight(dp(48));
         if (Build.VERSION.SDK_INT >= 26) address.setAutofillHints("url");
         toolbar.addView(address, new LinearLayout.LayoutParams(0, dp(48), 1));
         address.setOnEditorActionListener((v, action, event) -> {
@@ -153,28 +184,38 @@ public class MainActivity extends Activity {
             }
             return false;
         });
+
+        TextView reload = chromeButton("↻", 21, "Reload page");
+        LinearLayout.LayoutParams reloadParams = new LinearLayout.LayoutParams(dp(44), dp(48));
+        reloadParams.leftMargin = dp(8);
+        toolbar.addView(reload, reloadParams);
+        reload.setOnClickListener(v -> current().reload());
         root.addView(toolbar);
 
         progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progressBar.setMax(100);
         progressBar.setProgressTintList(android.content.res.ColorStateList.valueOf(ACCENT));
         progressBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(BG));
-        root.addView(progressBar, new LinearLayout.LayoutParams(-1, dp(3)));
+        root.addView(progressBar, new LinearLayout.LayoutParams(-1, dp(2)));
 
         webContainer = new FrameLayout(this);
         root.addView(webContainer, new LinearLayout.LayoutParams(-1, 0, 1));
 
         bottomBar = new LinearLayout(this);
         bottomBar.setGravity(Gravity.CENTER);
-        bottomBar.setPadding(dp(8), dp(8), dp(8), dp(12));
-        bottomBar.setBackgroundColor(BG);
-        String[] labels = {"‹", "›", "⌂", "↻", "＋", "⋮"};
-        String[] descriptions = {"Go back", "Go forward", "Open homepage", "Reload page", "New tab", "Browser menu"};
+        bottomBar.setPadding(dp(8), dp(7), dp(8), dp(8));
+        bottomBar.setBackgroundColor(Color.rgb(20, 23, 31));
+        String[] labels = {"‹", "›", "⌂", "▢", "⋯"};
+        String[] descriptions = {"Go back", "Go forward", "Open homepage", "Tabs", "Browser menu"};
         for (int i = 0; i < labels.length; i++) {
             final int index = i;
-            TextView b = button(labels[i], 24);
+            TextView b = button(labels[i], 25);
+            b.setMinHeight(dp(48));
+            b.setBackground(rounded(index == 2 ? Color.rgb(38, 43, 59) : Color.rgb(29, 33, 44), 17));
             b.setContentDescription(descriptions[i]);
-            bottomBar.addView(b, new LinearLayout.LayoutParams(0, dp(48), 1));
+            LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(0, dp(48), 1);
+            itemParams.setMargins(dp(4), 0, dp(4), 0);
+            bottomBar.addView(b, itemParams);
             b.setOnClickListener(v -> {
                 switch (index) {
                     case 0:
@@ -188,12 +229,9 @@ public class MainActivity extends Activity {
                         current().loadUrl(getHomepage());
                         break;
                     case 3:
-                        current().reload();
+                        showTabs();
                         break;
                     case 4:
-                        addTab(HOME_PAGE);
-                        break;
-                    case 5:
                         showMenu();
                         break;
                 }
