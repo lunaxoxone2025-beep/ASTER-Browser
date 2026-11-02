@@ -74,10 +74,12 @@ public class MainActivity extends Activity {
         if (!restoreSession()) addTab(HOME_PAGE);
     }
 
+    private int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+
     private GradientDrawable rounded(int color, int radius) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
-        d.setCornerRadius(radius);
+        d.setCornerRadius(dp(radius));
         return d;
     }
 
@@ -87,7 +89,7 @@ public class MainActivity extends Activity {
         v.setTextColor(TEXT);
         v.setTextSize(size);
         v.setGravity(Gravity.CENTER);
-        v.setPadding(10, 8, 10, 8);
+        v.setPadding(dp(10), dp(8), dp(10), dp(8));
         return v;
     }
 
@@ -110,24 +112,24 @@ public class MainActivity extends Activity {
 
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(16, 10, 16, 8);
+        top.setPadding(dp(16), dp(10), dp(16), dp(8));
 
         TextView brand = button("✳  ASTER", 19);
         brand.setTypeface(Typeface.DEFAULT_BOLD);
         brand.setTextColor(ACCENT);
         brand.setContentDescription("ASTER Browser");
-        top.addView(brand, new LinearLayout.LayoutParams(0, 48, 1));
+        top.addView(brand, new LinearLayout.LayoutParams(0, dp(48), 1));
 
         tabCount = button("1", 14);
         tabCount.setBackground(rounded(PANEL, 18));
         tabCount.setContentDescription("Open tab switcher");
-        top.addView(tabCount, new LinearLayout.LayoutParams(44, 38));
+        top.addView(tabCount, new LinearLayout.LayoutParams(dp(44), dp(38)));
         tabCount.setOnClickListener(v -> showTabs());
         root.addView(top);
 
         toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        toolbar.setPadding(12, 4, 12, 10);
+        toolbar.setPadding(dp(12), dp(4), dp(12), dp(10));
 
         address = new EditText(this);
         address.setSingleLine(true);
@@ -136,12 +138,12 @@ public class MainActivity extends Activity {
         address.setHintTextColor(MUTED);
         address.setHint("Search or enter address");
         address.setContentDescription("Search or enter a web address");
-        address.setPadding(16, 0, 12, 0);
+        address.setPadding(dp(16), 0, dp(12), 0);
         address.setSelectAllOnFocus(true);
         address.setBackground(rounded(PANEL, 24));
         address.setImeOptions(EditorInfo.IME_ACTION_GO);
         if (Build.VERSION.SDK_INT >= 26) address.setAutofillHints("url");
-        toolbar.addView(address, new LinearLayout.LayoutParams(0, 48, 1));
+        toolbar.addView(address, new LinearLayout.LayoutParams(0, dp(48), 1));
         address.setOnEditorActionListener((v, action, event) -> {
             if (action == EditorInfo.IME_ACTION_GO ||
                 (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
@@ -157,14 +159,14 @@ public class MainActivity extends Activity {
         progressBar.setMax(100);
         progressBar.setProgressTintList(android.content.res.ColorStateList.valueOf(ACCENT));
         progressBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(BG));
-        root.addView(progressBar, new LinearLayout.LayoutParams(-1, 3));
+        root.addView(progressBar, new LinearLayout.LayoutParams(-1, dp(3)));
 
         webContainer = new FrameLayout(this);
         root.addView(webContainer, new LinearLayout.LayoutParams(-1, 0, 1));
 
         bottomBar = new LinearLayout(this);
         bottomBar.setGravity(Gravity.CENTER);
-        bottomBar.setPadding(8, 8, 8, 12);
+        bottomBar.setPadding(dp(8), dp(8), dp(8), dp(12));
         bottomBar.setBackgroundColor(BG);
         String[] labels = {"‹", "›", "⌂", "↻", "＋", "⋮"};
         String[] descriptions = {"Go back", "Go forward", "Open homepage", "Reload page", "New tab", "Browser menu"};
@@ -172,7 +174,7 @@ public class MainActivity extends Activity {
             final int index = i;
             TextView b = button(labels[i], 24);
             b.setContentDescription(descriptions[i]);
-            bottomBar.addView(b, new LinearLayout.LayoutParams(0, 48, 1));
+            bottomBar.addView(b, new LinearLayout.LayoutParams(0, dp(48), 1));
             b.setOnClickListener(v -> {
                 switch (index) {
                     case 0:
