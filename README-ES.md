@@ -38,8 +38,7 @@ ASTER Browser es un prototipo de navegador Android con identidad visual propia. 
 - Es un MVP en desarrollo; hace falta probarlo en dispositivos reales antes de considerarlo estable.
 
 ## Descargar e instalar el APK
-- Descarga directa: [ASTER Browser 0.5.0 APK](https://github.com/lunaxoxone2025-beep/ASTER-Browser/releases/download/v0.5.0/app-debug.apk), cuando la publicación de la compilación haya terminado.
-- También se conserva el artefacto `ASTER-Browser-debug` en GitHub Actions, que se descarga como ZIP y contiene `app-debug.apk`.
+- El artefacto `ASTER-Browser-debug` de GitHub Actions se descarga como ZIP y contiene `app-debug.apk`.
 - En Android, abre el APK descargado y autoriza la instalación desde esa fuente si el sistema lo solicita.
 
 ## Compilar el APK
