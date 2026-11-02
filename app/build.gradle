@@ -2,6 +2,13 @@ plugins {
     id 'com.android.application'
 }
 
+def hasReleaseSigning = [
+    'ASTER_STORE_FILE',
+    'ASTER_STORE_PASSWORD',
+    'ASTER_KEY_ALIAS',
+    'ASTER_KEY_PASSWORD'
+].every { System.getenv(it) }
+
 android {
     namespace 'com.aster.browser'
     compileSdk 35
@@ -12,5 +19,25 @@ android {
         targetSdk 35
         versionCode 10
         versionName '0.7.0'
+    }
+
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(System.getenv('ASTER_STORE_FILE'))
+                storePassword System.getenv('ASTER_STORE_PASSWORD')
+                keyAlias System.getenv('ASTER_KEY_ALIAS')
+                keyPassword System.getenv('ASTER_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled false
+        }
     }
 }
