@@ -1,11 +1,11 @@
-# ASTER Browser — Android MVP 0.3.0
+# ASTER Browser — Android MVP 0.4.0
 
-ASTER Browser es un prototipo de navegador Android con una interfaz oscura propia. Esta versión se centra en la continuidad de navegación y en los ajustes básicos del navegador.
+ASTER Browser es un prototipo de navegador Android con identidad visual propia. Esta versión incorpora una página de inicio interna, un icono de aplicación y herramientas básicas de personalización.
 
 ## Funciones
-- Navegación mediante barra de direcciones y búsqueda web.
+- Página de inicio ASTER con buscador, accesos rápidos y marcadores recientes.
 - Buscador configurable: Google, DuckDuckGo o Bing.
-- Página de inicio configurable.
+- Página de inicio web configurable mediante el botón de inicio.
 - Atrás, adelante, inicio y recarga.
 - Hasta 12 pestañas, con selector y cierre.
 - Restauración de pestañas y página activa al volver a abrir la aplicación.
@@ -17,6 +17,7 @@ ASTER Browser es un prototipo de navegador Android con una interfaz oscura propi
 - Limpieza de historial, cookies, caché y datos web.
 - Enlaces telefónicos, de correo y otros esquemas compatibles delegados a las aplicaciones Android correspondientes.
 - Preferencias guardadas localmente.
+- Icono de aplicación ASTER para dispositivos Android modernos y antiguos.
 
 ## Privacidad y seguridad
 - El acceso a contenido file:// y content:// desde páginas web está desactivado.
