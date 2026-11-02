@@ -1,4 +1,4 @@
-name: Build ASTER Android APK
+name: Build and Release ASTER Browser
 
 on:
   workflow_dispatch:
@@ -23,11 +23,24 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Read app version
+        id: version
+        run: |
+          VERSION=$(grep -oP "versionName '\\K[^']+" app/build.gradle)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Build debug APK
         run: gradle :app:assembleDebug
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ASTER-Browser-debug
+          name: ASTER-Browser-v${{ steps.version.outputs.version }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: ASTER Browser v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: app/build/outputs/apk/debug/app-debug.apk
