@@ -96,6 +96,17 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
         setContentView(root);
+        if (Build.VERSION.SDK_INT >= 35) {
+            root.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets bars = insets.getInsets(
+                    android.view.WindowInsets.Type.systemBars() |
+                    android.view.WindowInsets.Type.displayCutout()
+                );
+                view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                return insets;
+            });
+            root.requestApplyInsets();
+        }
 
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
@@ -104,10 +115,12 @@ public class MainActivity extends Activity {
         TextView brand = button("✳  ASTER", 19);
         brand.setTypeface(Typeface.DEFAULT_BOLD);
         brand.setTextColor(ACCENT);
+        brand.setContentDescription("ASTER Browser");
         top.addView(brand, new LinearLayout.LayoutParams(0, 48, 1));
 
         tabCount = button("1", 14);
         tabCount.setBackground(rounded(PANEL, 18));
+        tabCount.setContentDescription("Open tab switcher");
         top.addView(tabCount, new LinearLayout.LayoutParams(44, 38));
         tabCount.setOnClickListener(v -> showTabs());
         root.addView(top);
@@ -122,6 +135,7 @@ public class MainActivity extends Activity {
         address.setTextColor(TEXT);
         address.setHintTextColor(MUTED);
         address.setHint("Search or enter address");
+        address.setContentDescription("Search or enter a web address");
         address.setPadding(16, 0, 12, 0);
         address.setSelectAllOnFocus(true);
         address.setBackground(rounded(PANEL, 24));
@@ -153,9 +167,11 @@ public class MainActivity extends Activity {
         bottomBar.setPadding(8, 8, 8, 12);
         bottomBar.setBackgroundColor(BG);
         String[] labels = {"‹", "›", "⌂", "↻", "＋", "⋮"};
+        String[] descriptions = {"Go back", "Go forward", "Open homepage", "Reload page", "New tab", "Browser menu"};
         for (int i = 0; i < labels.length; i++) {
             final int index = i;
             TextView b = button(labels[i], 24);
+            b.setContentDescription(descriptions[i]);
             bottomBar.addView(b, new LinearLayout.LayoutParams(0, 48, 1));
             b.setOnClickListener(v -> {
                 switch (index) {
