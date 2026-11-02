@@ -489,6 +489,7 @@ public class MainActivity extends Activity {
     }
 
     private void addBookmark() {
+        if (HOME_PAGE.equals(current().getTag())) return;
         String url = current().getUrl();
         if (!isWebUrl(url)) return;
         Set<String> entries = new LinkedHashSet<>();
@@ -661,6 +662,7 @@ public class MainActivity extends Activity {
     }
 
     private void sharePage() {
+        if (HOME_PAGE.equals(current().getTag())) return;
         String url = current().getUrl();
         if (!isWebUrl(url)) return;
         Intent share = new Intent(Intent.ACTION_SEND);
