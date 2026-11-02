@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
     private final int PANEL = Color.rgb(27, 31, 42);
     private final int TEXT = Color.rgb(241, 244, 250);
     private final int MUTED = Color.rgb(151, 161, 180);
-    private final int ACCENT = Color.rgb(126, 145, 255);
+    private final int ACCENT = Color.rgb(255, 153, 74);
 
     private LinearLayout root, toolbar, bottomBar;
     private FrameLayout webContainer;
@@ -324,17 +324,17 @@ public class MainActivity extends Activity {
         html.append("<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>");
         html.append("<title>ASTER Home</title><style>");
         html.append("*{box-sizing:border-box}body{margin:0;background:#10131b;color:#f4f6fc;font-family:Arial,sans-serif}");
-        html.append(".wrap{max-width:760px;margin:0 auto;padding:30px 20px 42px}.brand{display:flex;align-items:center;gap:10px;color:#a9b5ff;font-size:13px;font-weight:800;letter-spacing:2.4px}");
-        html.append(".orb{width:34px;height:34px;border-radius:12px;background:linear-gradient(145deg,#a5b0ff,#6478ed);display:grid;place-items:center;color:#111522;font-size:19px;box-shadow:0 6px 24px #7588ff33}");
+        html.append(".wrap{max-width:760px;margin:0 auto;padding:30px 20px 42px}.brand{display:flex;align-items:center;gap:10px;color:#ffb875;font-size:13px;font-weight:800;letter-spacing:2.4px}");
+        html.append(".orb{width:34px;height:34px;border-radius:12px;background:linear-gradient(145deg,#ffc184,#e77c36);display:grid;place-items:center;color:#111522;font-size:19px;box-shadow:0 6px 24px #7588ff33}");
         html.append(".hero{padding:34px 0 26px}h1{font-size:38px;line-height:1.08;margin:0 0 10px;letter-spacing:-1.5px}.sub{color:#a0a9bd;font-size:14px;line-height:1.5;margin-bottom:24px}");
         html.append(".searchbox{display:flex;gap:8px;background:#202532;border:1px solid #343d50;border-radius:18px;padding:7px;box-shadow:0 12px 35px #0003}");
         html.append("input{min-width:0;flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:16px;padding:11px 12px}");
-        html.append("button{border:0;border-radius:13px;padding:0 18px;background:#a6b1ff;color:#111522;font-weight:800;font-size:14px}");
-        html.append(".privacy{display:flex;align-items:center;gap:10px;margin-top:16px;padding:13px 15px;border:1px solid #303849;border-radius:14px;background:#171c27;color:#aeb8cc;font-size:12px}.dot{width:8px;height:8px;border-radius:50%;background:#9eafff;box-shadow:0 0 12px #9eafff88}");
+        html.append("button{border:0;border-radius:13px;padding:0 18px;background:#ffb875;color:#111522;font-weight:800;font-size:14px}");
+        html.append(".privacy{display:flex;align-items:center;gap:10px;margin-top:16px;padding:13px 15px;border:1px solid #303849;border-radius:14px;background:#171c27;color:#aeb8cc;font-size:12px}.dot{width:8px;height:8px;border-radius:50%;background:#ffad62;box-shadow:0 0 12px #ffad6288}");
         html.append("h2{font-size:12px;color:#9ea9bf;letter-spacing:1.8px;text-transform:uppercase;margin:30px 0 13px}");
         html.append(".grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}");
         html.append(".card{display:flex;align-items:center;gap:12px;min-height:72px;text-decoration:none;color:#edf0fa;background:#1c222f;border:1px solid #2b3445;border-radius:16px;padding:13px;font-size:14px;transition:background .15s,border-color .15s}");
-        html.append(".card:active{background:#293248;border-color:#7183ed}.site-icon{flex:0 0 38px;height:38px;border-radius:12px;background:#30394d;color:#b7c2ff;display:grid;place-items:center;font-size:17px;font-weight:800}");
+        html.append(".card:active{background:#293248;border-color:#d88442}.site-icon{flex:0 0 38px;height:38px;border-radius:12px;background:#30394d;color:#ffd0a3;display:grid;place-items:center;font-size:17px;font-weight:800}");
         html.append(".card span{display:block;color:#929db2;font-size:11px;margin-top:4px;overflow-wrap:anywhere}.empty{color:#8792aa;font-size:13px;padding:14px 0}");
         html.append(".foot{color:#68748b;font-size:11px;margin-top:34px;border-top:1px solid #252c39;padding-top:18px}");
         html.append("@media(max-width:420px){.wrap{padding:24px 16px 34px}.hero{padding-top:28px}h1{font-size:34px}.card{padding:11px;gap:9px}.site-icon{flex-basis:34px;height:34px}}");
