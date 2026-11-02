@@ -122,44 +122,20 @@ public class MainActivity extends Activity {
             root.requestApplyInsets();
         }
 
-        LinearLayout top = new LinearLayout(this);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(dp(16), dp(8), dp(16), dp(8));
-
-        LinearLayout brandGroup = new LinearLayout(this);
-        brandGroup.setOrientation(LinearLayout.VERTICAL);
-        brandGroup.setGravity(Gravity.CENTER_VERTICAL);
-        TextView brand = button("ASTER", 18);
-        brand.setTypeface(Typeface.DEFAULT_BOLD);
-        brand.setTextColor(ACCENT);
-        brand.setPadding(0, 0, 0, 0);
-        TextView brandSub = button("BROWSER", 9);
-        brandSub.setTextColor(MUTED);
-        brandSub.setLetterSpacing(0.18f);
-        brandSub.setPadding(0, 0, 0, 0);
-        brandGroup.addView(brand);
-        brandGroup.addView(brandSub);
-        top.addView(brandGroup, new LinearLayout.LayoutParams(0, dp(48), 1));
-
-        tabCount = chromeButton("▢ 1", 14, "Open tab switcher");
-        tabCount.setPadding(dp(10), 0, dp(10), 0);
-        tabCount.setOnClickListener(v -> showTabs());
-        top.addView(tabCount, new LinearLayout.LayoutParams(-2, dp(42)));
-        root.addView(top);
-
+        // Compact browser chrome: the web page gets the visual focus.
         toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        toolbar.setPadding(dp(12), dp(4), dp(12), dp(10));
+        toolbar.setPadding(dp(10), dp(9), dp(10), dp(8));
 
-        TextView privacy = chromeButton("◈", 19, "ASTER privacy information");
+        TextView privacy = chromeButton("◈", 18, "ASTER privacy information");
         privacy.setTextColor(ACCENT);
-        LinearLayout.LayoutParams privacyParams = new LinearLayout.LayoutParams(dp(44), dp(48));
-        privacyParams.rightMargin = dp(8);
+        LinearLayout.LayoutParams privacyParams = new LinearLayout.LayoutParams(dp(42), dp(46));
+        privacyParams.rightMargin = dp(7);
         toolbar.addView(privacy, privacyParams);
         privacy.setOnClickListener(v -> new AlertDialog.Builder(this)
-            .setTitle("ASTER protection")
-            .setMessage("ASTER blocks mixed insecure content and disables third-party cookies. Advanced tracker blocking is planned for a future version.")
-            .setPositiveButton("Got it", null).show());
+            .setTitle("ASTER privacy")
+            .setMessage("Third-party cookies are disabled and mixed insecure content is blocked. Advanced tracker blocking is not available yet.")
+            .setPositiveButton("OK", null).show());
 
         address = new EditText(this);
         address.setSingleLine(true);
@@ -172,9 +148,9 @@ public class MainActivity extends Activity {
         address.setSelectAllOnFocus(true);
         address.setBackground(rounded(PANEL, 18));
         address.setImeOptions(EditorInfo.IME_ACTION_GO);
-        address.setMinHeight(dp(48));
+        address.setMinHeight(dp(46));
         if (Build.VERSION.SDK_INT >= 26) address.setAutofillHints("url");
-        toolbar.addView(address, new LinearLayout.LayoutParams(0, dp(48), 1));
+        toolbar.addView(address, new LinearLayout.LayoutParams(0, dp(46), 1));
         address.setOnEditorActionListener((v, action, event) -> {
             if (action == EditorInfo.IME_ACTION_GO ||
                 (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
@@ -185,9 +161,15 @@ public class MainActivity extends Activity {
             return false;
         });
 
-        TextView reload = chromeButton("↻", 21, "Reload page");
-        LinearLayout.LayoutParams reloadParams = new LinearLayout.LayoutParams(dp(44), dp(48));
-        reloadParams.leftMargin = dp(8);
+        tabCount = chromeButton("1", 13, "Open tabs");
+        LinearLayout.LayoutParams tabsParams = new LinearLayout.LayoutParams(dp(42), dp(46));
+        tabsParams.leftMargin = dp(7);
+        toolbar.addView(tabCount, tabsParams);
+        tabCount.setOnClickListener(v -> showTabs());
+
+        TextView reload = chromeButton("↻", 20, "Reload page");
+        LinearLayout.LayoutParams reloadParams = new LinearLayout.LayoutParams(dp(42), dp(46));
+        reloadParams.leftMargin = dp(7);
         toolbar.addView(reload, reloadParams);
         reload.setOnClickListener(v -> current().reload());
         root.addView(toolbar);
@@ -203,20 +185,20 @@ public class MainActivity extends Activity {
 
         bottomBar = new LinearLayout(this);
         bottomBar.setGravity(Gravity.CENTER);
-        bottomBar.setPadding(dp(8), dp(7), dp(8), dp(8));
-        bottomBar.setBackgroundColor(Color.rgb(20, 23, 31));
-        String[] labels = {"‹", "›", "⌂", "▢", "⋯"};
-        String[] descriptions = {"Go back", "Go forward", "Open homepage", "Tabs", "Browser menu"};
+        bottomBar.setPadding(dp(8), dp(6), dp(8), dp(7));
+        bottomBar.setBackgroundColor(Color.rgb(19, 22, 29));
+        String[] labels = {"‹", "›", "⌂", "＋", "⋯"};
+        String[] descriptions = {"Go back", "Go forward", "Home", "New tab", "Browser menu"};
         for (int i = 0; i < labels.length; i++) {
             final int index = i;
-            TextView b = button(labels[i], 25);
-            b.setMinHeight(dp(48));
-            b.setBackground(rounded(index == 2 ? Color.rgb(38, 43, 59) : Color.rgb(29, 33, 44), 17));
-            b.setContentDescription(descriptions[i]);
-            LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(0, dp(48), 1);
+            TextView item = button(labels[i], 24);
+            item.setMinHeight(dp(46));
+            item.setBackground(rounded(index == 2 ? Color.rgb(43, 47, 59) : Color.rgb(27, 31, 40), 16));
+            item.setContentDescription(descriptions[i]);
+            LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(0, dp(46), 1);
             itemParams.setMargins(dp(4), 0, dp(4), 0);
-            bottomBar.addView(b, itemParams);
-            b.setOnClickListener(v -> {
+            bottomBar.addView(item, itemParams);
+            item.setOnClickListener(v -> {
                 switch (index) {
                     case 0:
                         if (current().canGoBack()) current().goBack();
@@ -226,10 +208,10 @@ public class MainActivity extends Activity {
                         break;
                     case 2:
                         current().setTag(null);
-                        current().loadUrl(getHomepage());
+                        loadStartPage(current());
                         break;
                     case 3:
-                        showTabs();
+                        addTab(HOME_PAGE);
                         break;
                     case 4:
                         showMenu();
@@ -322,65 +304,61 @@ public class MainActivity extends Activity {
 
         StringBuilder html = new StringBuilder();
         html.append("<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>");
-        html.append("<title>ASTER Home</title><style>");
-        html.append("*{box-sizing:border-box}body{margin:0;background:#10131b;color:#f4f6fc;font-family:Arial,sans-serif}");
-        html.append(".wrap{max-width:760px;margin:0 auto;padding:30px 20px 42px}.brand{display:flex;align-items:center;gap:10px;color:#ffb875;font-size:13px;font-weight:800;letter-spacing:2.4px}");
-        html.append(".orb{width:34px;height:34px;border-radius:12px;background:linear-gradient(145deg,#ffc184,#e77c36);display:grid;place-items:center;color:#111522;font-size:19px;box-shadow:0 6px 24px #7588ff33}");
-        html.append(".hero{padding:34px 0 26px}h1{font-size:38px;line-height:1.08;margin:0 0 10px;letter-spacing:-1.5px}.sub{color:#a0a9bd;font-size:14px;line-height:1.5;margin-bottom:24px}");
-        html.append(".searchbox{display:flex;gap:8px;background:#202532;border:1px solid #343d50;border-radius:18px;padding:7px;box-shadow:0 12px 35px #0003}");
-        html.append("input{min-width:0;flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:16px;padding:11px 12px}");
-        html.append("button{border:0;border-radius:13px;padding:0 18px;background:#ffb875;color:#111522;font-weight:800;font-size:14px}");
-        html.append(".privacy{display:flex;align-items:center;gap:10px;margin-top:16px;padding:13px 15px;border:1px solid #303849;border-radius:14px;background:#171c27;color:#aeb8cc;font-size:12px}.dot{width:8px;height:8px;border-radius:50%;background:#ffad62;box-shadow:0 0 12px #ffad6288}");
-        html.append("h2{font-size:12px;color:#9ea9bf;letter-spacing:1.8px;text-transform:uppercase;margin:30px 0 13px}");
-        html.append(".grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}");
-        html.append(".card{display:flex;align-items:center;gap:12px;min-height:72px;text-decoration:none;color:#edf0fa;background:#1c222f;border:1px solid #2b3445;border-radius:16px;padding:13px;font-size:14px;transition:background .15s,border-color .15s}");
-        html.append(".card:active{background:#293248;border-color:#d88442}.site-icon{flex:0 0 38px;height:38px;border-radius:12px;background:#30394d;color:#ffd0a3;display:grid;place-items:center;font-size:17px;font-weight:800}");
-        html.append(".card span{display:block;color:#929db2;font-size:11px;margin-top:4px;overflow-wrap:anywhere}.empty{color:#8792aa;font-size:13px;padding:14px 0}");
-        html.append(".foot{color:#68748b;font-size:11px;margin-top:34px;border-top:1px solid #252c39;padding-top:18px}");
-        html.append("@media(max-width:420px){.wrap{padding:24px 16px 34px}.hero{padding-top:28px}h1{font-size:34px}.card{padding:11px;gap:9px}.site-icon{flex-basis:34px;height:34px}}");
-        html.append("</style></head><body><main class='wrap'>");
-        html.append("<div class='brand'><div class='orb'>✦</div> ASTER BROWSER</div>");
-        html.append("<section class='hero'><h1>A better way<br>to explore.</h1>");
-        html.append("<div class='sub'>A calmer, cleaner space for everything you do online.</div>");
-        html.append("<form class='searchbox' method='get' action='").append(searchAction).append("'>");
-        html.append("<input name='q' type='search' placeholder='Search or enter a question' autocomplete='off' aria-label='Search the web'>");
+        html.append("<meta name='color-scheme' content='dark'><title>New tab - ASTER</title><style>");
+        html.append("*{box-sizing:border-box}html,body{min-height:100%;margin:0}");
+        html.append("body{background:radial-gradient(ellipse at 50% 22%,#252b38 0%,#171b24 48%,#11141b 100%);color:#f4f5f8;font-family:Arial, sans-serif}");
+        html.append(".page{min-height:100vh;max-width:720px;margin:auto;padding:clamp(42px,12vh,110px) 22px 34px;display:flex;flex-direction:column;align-items:center}");
+        html.append(".logo{width:58px;height:58px;border-radius:20px;display:grid;place-items:center;background:linear-gradient(145deg,#ffc58e,#e98543);color:#191b22;font-size:30px;font-weight:900;box-shadow:0 10px 35px #0005}");
+        html.append(".name{margin-top:16px;font-size:21px;font-weight:800;letter-spacing:4px}.tag{margin-top:7px;color:#929bad;font-size:12px;letter-spacing:.5px}");
+        html.append("form{width:100%;max-width:590px;margin-top:36px;display:flex;align-items:center;background:#252b37;border:1px solid #394253;border-radius:18px;padding:6px;box-shadow:0 12px 35px #0003}");
+        html.append("input{min-width:0;flex:1;height:48px;border:0;outline:0;background:transparent;color:#fff;padding:0 13px;font-size:15px}input::placeholder{color:#929bad}");
+        html.append("button{height:44px;padding:0 17px;border:0;border-radius:13px;background:#f2a568;color:#17191f;font-size:13px;font-weight:800}");
+        html.append(".section{width:100%;max-width:590px;margin-top:38px}.heading{margin:0 0 15px;color:#aab2c1;font-size:11px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase}");
+        html.append(".sites{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}");
+        html.append(".site{min-height:100px;padding:15px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-decoration:none;color:#eef0f5;background:#202631;border:1px solid #303949;border-radius:17px;transition:background .15s,border-color .15s}");
+        html.append(".site:active{background:#303847;border-color:#d99056}.symbol{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;background:#343d4e;color:#ffd0a7;font-size:16px;font-weight:800}.label{font-size:12px;font-weight:600;overflow-wrap:anywhere;text-align:center}");
+        html.append(".saved{display:flex;flex-direction:column;gap:8px}.saved a{padding:13px 15px;border-radius:13px;background:#202631;border:1px solid #303949;color:#e9edf5;text-decoration:none;font-size:13px;overflow-wrap:anywhere}.empty{color:#7f899b;font-size:12px;padding:4px 2px}");
+        html.append(".footer{margin-top:auto;padding-top:45px;color:#657083;font-size:10px;letter-spacing:1px}");
+        html.append("@media(max-width:380px){.page{padding-left:15px;padding-right:15px}.sites{gap:8px}.site{min-height:88px}.label{font-size:11px}}");
+        html.append("</style></head><body><main class='page'>");
+        html.append("<div class='logo'>✦</div><div class='name'>ASTER</div><div class='tag'>A fresh start to the web</div>");
+        html.append("<form method='get' action='").append(searchAction).append("'>");
+        html.append("<input name='q' type='search' placeholder='Search the web' autocomplete='off' aria-label='Search the web'>");
         html.append("<button type='submit'>Search</button></form>");
-        html.append("<div class='privacy'><i class='dot'></i><div><b>Privacy basics are on</b><br>Third-party cookies are disabled in ASTER.</div></div></section>");
-        html.append("<h2>Your shortcuts</h2><div class='grid'>");
-        appendStartCard(html, "Google", "Search the web", "https://www.google.com");
-        appendStartCard(html, "YouTube", "Watch videos", "https://www.youtube.com");
-        appendStartCard(html, "Wikipedia", "Explore knowledge", "https://www.wikipedia.org");
-        appendStartCard(html, "GitHub", "Build something", "https://github.com");
-        appendStartCard(html, "Reddit", "Join communities", "https://www.reddit.com");
-        appendStartCard(html, "DuckDuckGo", "Private search", "https://duckduckgo.com");
-        html.append("</div><h2>Saved pages</h2><div class='grid'>");
+        html.append("<section class='section'><div class='heading'>Quick access</div><div class='sites'>");
+        appendStartCard(html, "Google", "G", "https://www.google.com");
+        appendStartCard(html, "YouTube", "▶", "https://www.youtube.com");
+        appendStartCard(html, "GitHub", "⌘", "https://github.com");
+        appendStartCard(html, "Wikipedia", "W", "https://www.wikipedia.org");
+        appendStartCard(html, "Reddit", "r", "https://www.reddit.com");
+        appendStartCard(html, "DuckDuckGo", "D", "https://duckduckgo.com");
+        html.append("</div></section>");
 
         List<String> saved = new ArrayList<>();
         for (String line : prefs.getString("bookmarks", "").split("\\n")) {
             if (!line.trim().isEmpty() && isWebUrl(line.trim())) saved.add(line.trim());
-            if (saved.size() == 6) break;
+            if (saved.size() == 4) break;
         }
+        html.append("<section class='section'><div class='heading'>Bookmarks</div><div class='saved'>");
         if (saved.isEmpty()) {
-            html.append("<div class='empty'>Your saved pages will appear here.</div>");
+            html.append("<div class='empty'>Pages you bookmark will appear here.</div>");
         } else {
             for (String url : saved) {
                 String label = Uri.parse(url).getHost();
                 if (label == null || label.isEmpty()) label = url;
-                html.append("<a class='card' href='").append(escapeHtml(url)).append("'>")
-                    .append(escapeHtml(label)).append("<span>")
-                    .append(escapeHtml(url)).append("</span></a>");
+                html.append("<a href='").append(escapeHtml(url)).append("'>")
+                    .append(escapeHtml(label)).append("</a>");
             }
         }
-        html.append("</div><div class='foot'>ASTER Browser · Built for your everyday web.</div></main></body></html>");
+        html.append("</div></section><div class='footer'>ASTER BROWSER</div></main></body></html>");
         target.setTag(HOME_PAGE);
         target.loadDataWithBaseURL("https://aster.start/", html.toString(), "text/html", "UTF-8", null);
     }
 
-    private void appendStartCard(StringBuilder html, String title, String subtitle, String url) {
-        String icon = title.isEmpty() ? "•" : title.substring(0, 1).toUpperCase();
-        html.append("<a class='card' href='").append(url).append("'><b class='site-icon'>")
-            .append(icon).append("</b><div>").append(title).append("<span>")
-            .append(subtitle).append("</span></div></a>");
+    private void appendStartCard(StringBuilder html, String title, String symbol, String url) {
+        html.append("<a class='site' href='").append(url).append("'><b class='symbol'>")
+            .append(symbol).append("</b><span class='label'>").append(title)
+            .append("</span></a>");
     }
 
     private String escapeHtml(String value) {
