@@ -46,6 +46,7 @@ import java.util.Set;
 
 public class MainActivity extends Activity {
     private static final int MAX_TABS = 12;
+    private static final String HOME_PAGE = "aster://start";
     private static final int DOWNLOAD_PERMISSION_REQUEST = 701;
 
     private final int BG = Color.rgb(15, 17, 23);
@@ -70,7 +71,7 @@ public class MainActivity extends Activity {
         getWindow().setNavigationBarColor(BG);
         prefs = getSharedPreferences("aster", MODE_PRIVATE);
         buildUi();
-        if (!restoreSession()) addTab(getHomepage());
+        if (!restoreSession()) addTab(HOME_PAGE);
     }
 
     private GradientDrawable rounded(int color, int radius) {
@@ -165,13 +166,14 @@ public class MainActivity extends Activity {
                         if (current().canGoForward()) current().goForward();
                         break;
                     case 2:
+                        current().setTag(null);
                         current().loadUrl(getHomepage());
                         break;
                     case 3:
                         current().reload();
                         break;
                     case 4:
-                        addTab(getHomepage());
+                        addTab(HOME_PAGE);
                         break;
                     case 5:
                         showMenu();
@@ -214,7 +216,7 @@ public class MainActivity extends Activity {
                 if (view == current()) {
                     progressBar.setVisibility(progress >= 100 ? View.GONE : View.VISIBLE);
                     progressBar.setProgress(progress);
-                    if (progress == 100 && view.getUrl() != null) address.setText(view.getUrl());
+                    if (progress == 100 && view.getUrl() != null) address.setText(HOME_PAGE.equals(view.getTag()) ? "" : view.getUrl());
                 }
             }
 
@@ -224,6 +226,10 @@ public class MainActivity extends Activity {
         });
 
         w.setWebViewClient(new WebViewClient() {
+            @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                if (!"https://aster.start/".equals(url)) view.setTag(null);
+            }
+
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String scheme = uri.getScheme();
@@ -237,8 +243,9 @@ public class MainActivity extends Activity {
             }
 
             @Override public void onPageFinished(WebView view, String url) {
-                if (view == current()) address.setText(url);
-                if (isWebUrl(url)) {
+                boolean isStartPage = HOME_PAGE.equals(view.getTag()) && "https://aster.start/".equals(url);
+                if (view == current()) address.setText(isStartPage ? "" : url);
+                if (!isStartPage && isWebUrl(url)) {
                     String old = prefs.getString("history", "");
                     String line = url + "\n";
                     if (!old.contains(line)) prefs.edit().putString("history", line + old).apply();
@@ -247,6 +254,73 @@ public class MainActivity extends Activity {
             }
         });
         return w;
+    }
+
+    private void loadStartPage(WebView target) {
+        String engine = prefs.getString("search_engine", "google");
+        String searchAction = "https://www.google.com/search";
+        if ("duckduckgo".equals(engine)) searchAction = "https://duckduckgo.com/";
+        else if ("bing".equals(engine)) searchAction = "https://www.bing.com/search";
+
+        StringBuilder html = new StringBuilder();
+        html.append("<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>");
+        html.append("<title>ASTER Home</title><style>");
+        html.append("*{box-sizing:border-box}body{margin:0;background:#0f1117;color:#f1f4fa;font-family:Arial,sans-serif}");
+        html.append(".wrap{max-width:720px;margin:0 auto;padding:48px 22px 36px}.mark{color:#8b9aff;font-size:14px;font-weight:700;letter-spacing:3px}");
+        html.append("h1{font-size:42px;margin:18px 0 8px;letter-spacing:-1.5px}.sub{color:#9aa4ba;font-size:15px;margin-bottom:30px}");
+        html.append("form{display:flex;gap:8px;background:#1b1f2a;border:1px solid #303749;border-radius:16px;padding:7px}");
+        html.append("input{min-width:0;flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:16px;padding:10px}");
+        html.append("button{border:0;border-radius:11px;padding:0 17px;background:#8191ff;color:#101321;font-weight:700;font-size:14px}");
+        html.append("h2{font-size:13px;color:#9aa4ba;letter-spacing:1.5px;text-transform:uppercase;margin:34px 0 14px}");
+        html.append(".grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}");
+        html.append(".card{display:block;text-decoration:none;color:#e9edfa;background:#1b1f2a;border:1px solid #292f3e;border-radius:14px;padding:16px 12px;font-size:14px}");
+        html.append(".card span{display:block;color:#8792aa;font-size:11px;margin-top:6px;overflow-wrap:anywhere}");
+        html.append(".empty{color:#8792aa;font-size:13px;padding:14px 0}.foot{color:#69748c;font-size:11px;margin-top:38px}");
+        html.append("@media(max-width:420px){.wrap{padding:34px 16px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}h1{font-size:36px}}");
+        html.append("</style></head><body><main class='wrap'>");
+        html.append("<div class='mark'>✳ ASTER BROWSER</div><h1>Your space on the web.</h1>");
+        html.append("<div class='sub'>A fresh start. Pick up where you want to go.</div>");
+        html.append("<form method='get' action='").append(searchAction).append("'>");
+        html.append("<input name='q' type='search' placeholder='Search or enter a question' autocomplete='off' aria-label='Search the web'>");
+        html.append("<button type='submit'>Search</button></form>");
+        html.append("<h2>Quick access</h2><div class='grid'>");
+        appendStartCard(html, "Google", "Search the web", "https://www.google.com");
+        appendStartCard(html, "YouTube", "Watch videos", "https://www.youtube.com");
+        appendStartCard(html, "Wikipedia", "Explore knowledge", "https://www.wikipedia.org");
+        appendStartCard(html, "GitHub", "Build something", "https://github.com");
+        appendStartCard(html, "Reddit", "Join communities", "https://www.reddit.com");
+        appendStartCard(html, "DuckDuckGo", "Private search", "https://duckduckgo.com");
+        html.append("</div><h2>Your bookmarks</h2><div class='grid'>");
+
+        List<String> saved = new ArrayList<>();
+        for (String line : prefs.getString("bookmarks", "").split("\\n")) {
+            if (!line.trim().isEmpty() && isWebUrl(line.trim())) saved.add(line.trim());
+            if (saved.size() == 6) break;
+        }
+        if (saved.isEmpty()) {
+            html.append("<div class='empty'>Your saved pages will appear here.</div>");
+        } else {
+            for (String url : saved) {
+                String label = Uri.parse(url).getHost();
+                if (label == null || label.isEmpty()) label = url;
+                html.append("<a class='card' href='").append(escapeHtml(url)).append("'>")
+                    .append(escapeHtml(label)).append("<span>")
+                    .append(escapeHtml(url)).append("</span></a>");
+            }
+        }
+        html.append("</div><div class='foot'>ASTER Browser · Your browsing, your way.</div></main></body></html>");
+        target.setTag(HOME_PAGE);
+        target.loadDataWithBaseURL("https://aster.start/", html.toString(), "text/html", "UTF-8", null);
+    }
+
+    private void appendStartCard(StringBuilder html, String title, String subtitle, String url) {
+        html.append("<a class='card' href='").append(url).append("'>")
+            .append(title).append("<span>").append(subtitle).append("</span></a>");
+    }
+
+    private String escapeHtml(String value) {
+        return value.replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;");
     }
 
     private void addTab(String url) {
@@ -258,7 +332,8 @@ public class MainActivity extends Activity {
         tabs.add(w);
         webContainer.addView(w, new FrameLayout.LayoutParams(-1, -1));
         selectTab(tabs.size() - 1);
-        w.loadUrl(url);
+        if (HOME_PAGE.equals(url)) loadStartPage(w);
+        else w.loadUrl(url);
         saveSession();
     }
 
@@ -269,7 +344,7 @@ public class MainActivity extends Activity {
             tabs.get(i).setVisibility(i == active ? View.VISIBLE : View.GONE);
         }
         tabCount.setText(String.valueOf(tabs.size()));
-        address.setText(current().getUrl() == null ? "" : current().getUrl());
+        address.setText(HOME_PAGE.equals(current().getTag()) || current().getUrl() == null ? "" : current().getUrl());
         progressBar.setVisibility(View.GONE);
         saveSession();
     }
@@ -281,7 +356,7 @@ public class MainActivity extends Activity {
             int limit = Math.min(saved.length(), MAX_TABS);
             for (int i = 0; i < limit; i++) {
                 String url = saved.optString(i, "");
-                if (isWebUrl(url)) addTab(url);
+                if (isWebUrl(url) || HOME_PAGE.equals(url)) addTab(url);
             }
             if (!tabs.isEmpty()) {
                 selectTab(Math.min(prefs.getInt("active_tab", 0), tabs.size() - 1));
@@ -297,8 +372,8 @@ public class MainActivity extends Activity {
         if (prefs == null || tabs.isEmpty()) return;
         JSONArray saved = new JSONArray();
         for (int i = 0; i < tabs.size() && i < MAX_TABS; i++) {
-            String url = tabs.get(i).getUrl();
-            if (url == null || !isWebUrl(url)) url = getHomepage();
+            String url = HOME_PAGE.equals(tabs.get(i).getTag()) ? HOME_PAGE : tabs.get(i).getUrl();
+            if (url == null || (!isWebUrl(url) && !HOME_PAGE.equals(url))) url = getHomepage();
             saved.put(url);
         }
         prefs.edit()
@@ -335,6 +410,7 @@ public class MainActivity extends Activity {
         String value = input.trim();
         if (value.isEmpty()) return;
 
+        current().setTag(null);
         if (isWebUrl(value)) {
             current().loadUrl(value);
         } else if (value.matches("(?i)^[a-z][a-z0-9+.-]*://.*")) {
@@ -366,7 +442,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
             .setTitle("ASTER tabs (" + tabs.size() + "/" + MAX_TABS + ")")
             .setItems(names, (d, which) -> {
-                if (which == tabs.size()) addTab(getHomepage());
+                if (which == tabs.size()) addTab(HOME_PAGE);
                 else selectTab(which);
             })
             .setNegativeButton("Close active tab", (d, w) -> closeTab())
@@ -407,7 +483,7 @@ public class MainActivity extends Activity {
                     break;
                 case 6: confirmClearBrowsingData(); break;
                 case 7: showSettings(); break;
-                case 8: addTab(getHomepage()); break;
+                case 8: addTab(HOME_PAGE); break;
             }
         }).show();
     }
