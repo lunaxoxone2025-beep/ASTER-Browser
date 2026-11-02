@@ -1,8 +1,15 @@
 package com.aster.browser;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.DownloadManager;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -13,13 +20,18 @@ import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
+import android.webkit.CookieManager;
+import android.webkit.DownloadListener;
+import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.net.URLEncoder;
@@ -36,6 +48,8 @@ public class MainActivity extends Activity {
     private FrameLayout webContainer;
     private EditText address;
     private TextView tabCount;
+    private ProgressBar progressBar;
+    private String pendingDownloadUrl, pendingDownloadUserAgent, pendingDownloadMime, pendingDownloadDisposition;
     private final List<WebView> tabs = new ArrayList<>();
     private int active = 0;
     private SharedPreferences prefs;
@@ -103,6 +117,12 @@ public class MainActivity extends Activity {
         });
         root.addView(toolbar);
 
+        progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progressBar.setMax(100);
+        progressBar.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.rgb(113, 134, 255)));
+        progressBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(BG));
+        root.addView(progressBar, new LinearLayout.LayoutParams(-1, 3));
+
         webContainer = new FrameLayout(this);
         root.addView(webContainer, new LinearLayout.LayoutParams(-1, 0, 1));
 
@@ -140,10 +160,23 @@ public class MainActivity extends Activity {
         w.getSettings().setUseWideViewPort(true);
         w.getSettings().setSupportZoom(true);
         w.getSettings().setBuiltInZoomControls(true);
-        w.getSettings().setDisplayZoomControls(false);
+        WebSettings settings = w.getSettings();
+        settings.setDisplayZoomControls(false);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        settings.setSupportMultipleWindows(false);
+        if (Build.VERSION.SDK_INT >= 26) settings.setSafeBrowsingEnabled(true);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(w, false);
+        w.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) ->
+            confirmDownload(url, userAgent, contentDisposition, mimeType));
         w.setWebChromeClient(new WebChromeClient() {
             @Override public void onProgressChanged(WebView view, int progress) {
-                if (view == current() && progress == 100) address.setText(view.getUrl());
+                if (view == current()) {
+                    progressBar.setVisibility(progress >= 100 ? View.GONE : View.VISIBLE);
+                    progressBar.setProgress(progress);
+                    if (progress == 100) address.setText(view.getUrl());
+                }
             }
         });
         w.setWebViewClient(new WebViewClient() {
@@ -207,7 +240,7 @@ public class MainActivity extends Activity {
     }
 
     private void showMenu() {
-        String[] items = {"Add bookmark", "Bookmarks", "History", "Clear browsing history", "New tab"};
+        String[] items = {"Add bookmark", "Bookmarks", "History", "Find in page", "Share page", "Downloads", "Clear browsing history", "New tab"};
         new AlertDialog.Builder(this).setTitle("ASTER menu").setItems(items, (d, which) -> {
             switch (which) {
                 case 0:
@@ -216,10 +249,97 @@ public class MainActivity extends Activity {
                     Toast.makeText(this, "Bookmark saved", Toast.LENGTH_SHORT).show(); break;
                 case 1: showSavedList("Bookmarks", "bookmarks"); break;
                 case 2: showSavedList("History", "history"); break;
-                case 3: prefs.edit().remove("history").apply(); Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show(); break;
-                case 4: addTab("https://www.google.com"); break;
+                case 3: findInPage(); break;
+                case 4: sharePage(); break;
+                case 5:
+                    try { startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)); }
+                    catch (Exception e) { Toast.makeText(this, "Downloads are managed by Android", Toast.LENGTH_SHORT).show(); }
+                    break;
+                case 6: prefs.edit().remove("history").apply(); Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show(); break;
+                case 7: addTab("https://www.google.com"); break;
             }
         }).show();
+    }
+
+
+    private void confirmDownload(String url, String userAgent, String contentDisposition, String mimeType) {
+        pendingDownloadUrl = url;
+        pendingDownloadUserAgent = userAgent;
+        pendingDownloadDisposition = contentDisposition;
+        pendingDownloadMime = mimeType;
+        String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
+        new AlertDialog.Builder(this)
+            .setTitle("Download file?")
+            .setMessage(fileName + "\n\nSave to your Downloads folder?")
+            .setNegativeButton("Cancel", (d, w) -> clearPendingDownload())
+            .setPositiveButton("Download", (d, w) -> {
+                if (Build.VERSION.SDK_INT <= 28 &&
+                    checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 701);
+                } else startPendingDownload();
+            }).show();
+    }
+
+    private void startPendingDownload() {
+        if (pendingDownloadUrl == null) return;
+        try {
+            String fileName = URLUtil.guessFileName(pendingDownloadUrl, pendingDownloadDisposition, pendingDownloadMime);
+            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(pendingDownloadUrl));
+            request.setTitle(fileName);
+            request.setDescription("Downloading with ASTER Browser");
+            request.setMimeType(pendingDownloadMime);
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
+            if (pendingDownloadUserAgent != null) request.addRequestHeader("User-Agent", pendingDownloadUserAgent);
+            String cookies = CookieManager.getInstance().getCookie(pendingDownloadUrl);
+            if (cookies != null) request.addRequestHeader("Cookie", cookies);
+            DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            manager.enqueue(request);
+            Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not start download: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+        clearPendingDownload();
+    }
+
+    private void clearPendingDownload() {
+        pendingDownloadUrl = null;
+        pendingDownloadUserAgent = null;
+        pendingDownloadDisposition = null;
+        pendingDownloadMime = null;
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 701) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) startPendingDownload();
+            else {
+                Toast.makeText(this, "Storage permission is required for this Android version", Toast.LENGTH_LONG).show();
+                clearPendingDownload();
+            }
+        }
+    }
+
+    private void findInPage() {
+        EditText query = new EditText(this);
+        query.setSingleLine(true);
+        query.setHint("Text to find");
+        new AlertDialog.Builder(this).setTitle("Find in page").setView(query)
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Clear", (d, w) -> current().clearMatches())
+            .setPositiveButton("Find", (d, w) -> {
+                String value = query.getText().toString().trim();
+                if (!value.isEmpty()) current().findAllAsync(value);
+            }).show();
+    }
+
+    private void sharePage() {
+        String url = current().getUrl();
+        if (url == null) return;
+        Intent share = new Intent(Intent.ACTION_SEND);
+        share.setType("text/plain");
+        share.putExtra(Intent.EXTRA_TEXT, url);
+        startActivity(Intent.createChooser(share, "Share page"));
     }
 
     private void showSavedList(String heading, String key) {
