@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.1] - 2026-11-02
+### Changed
+- Prepared a persistent Android release-signing configuration so future APK updates can be installed over existing installations.
+- Increased the Android version code for the first stable-signature migration release.
+
+### Notes
+- A one-time uninstall of APKs signed with the previous temporary debug key may still be required before installing the first permanently signed APK.
+- The signed release is not published until the repository's four signing secrets are configured.
+- Rendering still uses Android System WebView.
+
 ## [0.7.0] - 2026-11-02
 ### Changed
 - Replaced the large branded header with compact browser controls so websites receive more screen space.
