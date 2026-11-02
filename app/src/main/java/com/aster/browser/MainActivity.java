@@ -45,7 +45,7 @@ import java.util.List;
 import java.util.Set;
 
 public class MainActivity extends Activity {
-    private static final int MAX_TABS = 12;
+    private static final int MAX_TABS = 8;
     private static final String HOME_PAGE = "aster://start";
     private static final int DOWNLOAD_PERMISSION_REQUEST = 701;
 
@@ -216,6 +216,8 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(true);
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setOffscreenPreRaster(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -355,9 +357,17 @@ public class MainActivity extends Activity {
 
     private void selectTab(int index) {
         if (index < 0 || index >= tabs.size()) return;
+        if (active >= 0 && active < tabs.size()) tabs.get(active).onPause();
         active = index;
         for (int i = 0; i < tabs.size(); i++) {
-            tabs.get(i).setVisibility(i == active ? View.VISIBLE : View.GONE);
+            WebView tab = tabs.get(i);
+            if (i == active) {
+                tab.setVisibility(View.VISIBLE);
+                tab.onResume();
+            } else {
+                tab.setVisibility(View.GONE);
+                tab.onPause();
+            }
         }
         tabCount.setText(String.valueOf(tabs.size()));
         address.setText(HOME_PAGE.equals(current().getTag()) || current().getUrl() == null ? "" : current().getUrl());
@@ -719,7 +729,16 @@ public class MainActivity extends Activity {
 
     @Override protected void onPause() {
         saveSession();
+        for (WebView tab : tabs) tab.onPause();
         super.onPause();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        for (int i = 0; i < tabs.size(); i++) {
+            if (i == active) tabs.get(i).onResume();
+            else tabs.get(i).onPause();
+        }
     }
 
     @Override public void onBackPressed() {
