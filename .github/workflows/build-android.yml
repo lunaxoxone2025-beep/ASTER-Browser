@@ -32,19 +32,51 @@ jobs:
         run: |
           VERSION=$(grep -oP "versionName '\\K[^']+" app/build.gradle)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-      - name: Build debug APK
+      - name: Prepare persistent release signing
+        id: signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ASTER_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ASTER_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ASTER_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ASTER_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/aster-release.jks"
+            echo "ASTER_STORE_FILE=$RUNNER_TEMP/aster-release.jks" >> "$GITHUB_ENV"
+            echo "ASTER_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "ASTER_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "ASTER_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Persistent signing is not configured. Building a debug APK for testing only; no install-over update will be published."
+          fi
+      - name: Build signed release APK
+        if: steps.signing.outputs.ready == 'true'
+        run: gradle :app:assembleRelease
+      - name: Build debug APK for testing
+        if: steps.signing.outputs.ready != 'true'
         run: gradle :app:assembleDebug
-      - name: Upload APK artifact
+      - name: Upload signed APK artifact
+        if: steps.signing.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ASTER-Browser-v${{ steps.version.outputs.version }}
+          name: ASTER-Browser-v${{ steps.version.outputs.version }}-signed
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
+      - name: Upload debug test APK artifact
+        if: steps.signing.outputs.ready != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ASTER-Browser-v${{ steps.version.outputs.version }}-debug-test-only
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
-      - name: Publish GitHub Release
+      - name: Publish signed GitHub Release
+        if: steps.signing.outputs.ready == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: ASTER Browser v${{ steps.version.outputs.version }}
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: app/build/outputs/apk/release/app-release.apk
