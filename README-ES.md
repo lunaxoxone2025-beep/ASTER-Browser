@@ -1,47 +1,45 @@
-# ASTER Browser — Android MVP 0.5.0
+# ASTER Browser — Android MVP 0.6.0
 
-ASTER Browser es un prototipo de navegador Android con identidad visual propia. Esta versión mejora el uso de recursos de las pestañas: las pestañas inactivas se pausan y el límite se establece en ocho para reducir trabajo en segundo plano. Mantiene la página de inicio ASTER y la compatibilidad con Android 15.
+ASTER es un navegador Android en desarrollo, con una interfaz oscura y minimalista, accesos rápidos, navegación por pestañas y controles pensados para pantallas móviles. Su lenguaje visual toma como referencia la claridad y la estructura de navegadores modernos como Brave, pero mantiene la identidad propia de ASTER.
 
-## Funciones
+## Novedades de 0.6.0
+- Rediseño de la barra superior y la barra de navegación inferior.
+- Barra de direcciones con controles separados y áreas táctiles más cómodas.
+- Página de inicio renovada con buscador, accesos rápidos y estado de privacidad básico.
+- Publicación automática de una GitHub Release con el APK cuando la compilación termina correctamente.
+- Ajustes de tamaños y espaciados para pantallas Android con distintas densidades.
+
+## Funciones actuales
 - Página de inicio ASTER con buscador, accesos rápidos y marcadores recientes.
 - Buscador configurable: Google, DuckDuckGo o Bing.
-- Página de inicio web configurable mediante el botón de inicio.
-- Atrás, adelante, inicio y recarga.
-- Hasta 8 pestañas, con selector y cierre.
-- Pausa de WebViews inactivos al cambiar de pestaña y al enviar la app a segundo plano.
-- Renderizado previo fuera de pantalla desactivado para evitar trabajo gráfico innecesario.
-- Restauración de pestañas y página activa al volver a abrir la aplicación.
+- Página de inicio web configurable.
+- Atrás, adelante, inicio, recarga y selector de pestañas.
+- Hasta 8 pestañas; las inactivas se pausan para reducir trabajo en segundo plano.
+- Restauración local de pestañas.
 - Barra de progreso de carga.
-- Descargas con confirmación, notificación y acceso al gestor de descargas de Android.
-- Búsqueda de texto dentro de la página y uso del menú Compartir de Android.
-- Marcadores locales con opción para abrirlos o eliminarlos.
-- Historial local.
+- Descargas mediante Android DownloadManager.
+- Búsqueda dentro de la página y uso del menú Compartir de Android.
+- Marcadores e historial locales.
 - Limpieza de historial, cookies, caché y datos web.
-- Enlaces telefónicos, de correo y otros esquemas compatibles delegados a las aplicaciones Android correspondientes.
 - Preferencias guardadas localmente.
-- Icono de aplicación ASTER para dispositivos Android modernos y antiguos.
-- Ajuste de áreas seguras del sistema para Android 15 y etiquetas de accesibilidad para los controles principales.
 
 ## Privacidad y seguridad
-- El acceso a contenido file:// y content:// desde páginas web está desactivado.
+- El acceso web a contenido file:// y content:// está desactivado.
 - El contenido mixto inseguro está bloqueado.
 - Las cookies de terceros están desactivadas.
 - Safe Browsing se habilita cuando está disponible en Android.
-- La copia de seguridad automática de los datos de la aplicación está desactivada.
-- La navegación web utiliza HTTPS cuando se introduce un dominio sin esquema.
 
-## Limitaciones conocidas
-- **No incluye un motor de renderizado propio.** Utiliza Android System WebView, que depende del componente WebView/Chrome instalado en el dispositivo.
-- No hay todavía modo incógnito aislado, sincronización entre dispositivos ni bloqueo avanzado de rastreadores.
-- Las pestañas se restauran localmente, pero los estados internos de formularios o páginas no se conservan.
-- La versión actual es Android. La versión de escritorio se desarrollará en una fase posterior.
-- Es un MVP en desarrollo; hace falta probarlo en dispositivos reales antes de considerarlo estable.
+**Importante:** ASTER todavía no incluye un bloqueador avanzado de rastreadores ni un motor de renderizado propio. La navegación utiliza Android System WebView, que depende del componente WebView/Chrome instalado en el dispositivo.
 
-## Descargar e instalar el APK
-- El artefacto `ASTER-Browser-debug` de GitHub Actions se descarga como ZIP y contiene `app-debug.apk`.
-- En Android, abre el APK descargado y autoriza la instalación desde esa fuente si el sistema lo solicita.
+## Descargar
+Cuando una compilación termina correctamente, GitHub Actions crea o actualiza automáticamente una publicación en **Releases** y adjunta el archivo `app-debug.apk`.
 
-## Compilar el APK
-1. Abre la pestaña **Actions** del repositorio.
-2. Selecciona el workflow **Build ASTER Android APK**.
-3. Cuando termine correctamente, descarga el APK desde la sección Releases o el artefacto de Actions.
+- Abre [Releases](https://github.com/lunaxoxone2025-beep/ASTER-Browser/releases).
+- Entra en la versión más reciente.
+- Descarga `app-debug.apk` e instálalo en Android.
+- Si Android lo solicita, autoriza la instalación desde esa fuente.
+
+El APK de estas versiones es una compilación de depuración, no una versión firmada para distribución comercial.
+
+## Estado del proyecto
+ASTER sigue siendo un MVP. La interfaz y las funciones deben probarse en dispositivos reales; una compilación correcta de GitHub no sustituye las pruebas en un teléfono físico. La versión de escritorio se abordará en una fase posterior.
