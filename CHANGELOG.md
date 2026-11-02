@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.7.0] - 2026-11-02
+### Changed
+- Replaced the large branded header with compact browser controls so websites receive more screen space.
+- Redesigned the new-tab page as a minimal dark dashboard with a centered ASTER mark, search field, quick-access tiles, and bookmarks.
+- Simplified navigation controls and added a dedicated new-tab action.
+- Kept website rendering inside the normal browser viewport without start-page content layered over websites.
+
+### Notes
+- The browser still uses Android System WebView; this is a UI redesign, not a custom rendering engine.
+
+
 ## [0.6.1] - 2026-11-02
 ### Changed
 - Refined ASTER's visual identity with a warm amber accent inspired by modern privacy-focused browsers.
