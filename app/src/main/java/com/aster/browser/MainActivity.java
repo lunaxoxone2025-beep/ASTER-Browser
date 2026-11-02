@@ -125,7 +125,7 @@ public class MainActivity extends Activity {
         address.setSelectAllOnFocus(true);
         address.setBackground(rounded(PANEL, 24));
         address.setImeOptions(EditorInfo.IME_ACTION_GO);
-        address.setAutofillHints("url");
+        if (Build.VERSION.SDK_INT >= 26) address.setAutofillHints("url");
         toolbar.addView(address, new LinearLayout.LayoutParams(0, 48, 1));
         address.setOnEditorActionListener((v, action, event) -> {
             if (action == EditorInfo.IME_ACTION_GO ||
