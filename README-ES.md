@@ -1,4 +1,4 @@
-# ASTER Browser — Android MVP 0.6.0
+# ASTER Browser — Android MVP 0.6.1
 
 ASTER es un navegador Android en desarrollo, con una interfaz oscura y minimalista, accesos rápidos, navegación por pestañas y controles pensados para pantallas móviles. Su lenguaje visual toma como referencia la claridad y la estructura de navegadores modernos como Brave, pero mantiene la identidad propia de ASTER.
 
