@@ -1,40 +1,31 @@
 # ASTER Browser
 
-Current Android version: **0.11.0**.
+Current Android version: **0.12.0**.
 
-A modern Android-first browser prototype, with a planned desktop version.
+ASTER is an Android-first browser prototype with a dark violet interface, tabbed browsing, bookmarks, history, downloads, and privacy controls. Its visual direction is original and takes broad inspiration from modern browsers such as Brave and Opera GX.
 
-## Project status
+## Engine and platform
 
-Early MVP. The Android app currently uses the platform WebView engine. A fully independent browser rendering engine is a separate, long-term research project.
+ASTER currently uses Android System WebView. It is not a standalone Chromium browser engine, so some browser-level capabilities and extensions are outside its reach.
+
+## ASTER Shield — ad and tracker blocking
+
+- Uses a local cache of supported domain network rules imported from EasyList and EasyPrivacy.
+- Includes built-in advertising and analytics domains.
+- Refreshes filter lists weekly when a network connection is available; users can also request an update from the Shield panel.
+- Supports global protection and per-site exceptions.
+- Tracks blocked requests per page and per session.
+
+**Important limitation:** the current WebView integration extracts domain-based network rules. It does not implement cosmetic CSS selectors, scriptlets, every ABP option, or advanced first-party ad removal. Therefore it can block many ad/tracker requests, but it cannot guarantee an ad-free page or match Brave's native Shields engine.
+
+## Backup and restore
+
+Use **Backup & restore** from the browser menu to export or import bookmarks, history, settings, and open tabs as JSON. Backups do not include cookies, passwords, cache, or WebView form data.
+
+## Updates
+
+ASTER checks GitHub Releases and can download an APK update for Android's package installer. Android requires user confirmation. Updating an installed copy also requires every release to use the same permanent signing key; until repository signing is configured, debug APKs are test builds and may not install over an existing copy.
 
 ## Build
 
-The Android project is built with Gradle and Android Gradle Plugin. See the project source and GitHub Actions workflow for build instructions.
-
-## Local backup and restore
-
-Open the browser menu and choose **Backup & restore**. Export creates a JSON file using Android's document picker. Import validates the backup and asks before replacing bookmarks, history, browser settings, and open tabs.
-
-Backups stay on the storage location chosen by the user. They do not include cookies, passwords, cached website files, or WebView form data.
-
-## ASTER Shield
-
-ASTER Shield is a lightweight request blocker implemented with Android WebView request interception. It includes a built-in set of known advertising and analytics hosts, a global enable/disable control, per-host exceptions, and session counters. Its compact built-in list is not a full filter-list engine and cannot remove all ads or cosmetic page elements.
-
-## Versioning and GitHub Releases
-
-Small fixes and internal refinements may be included in the next release. Significant feature updates receive a version bump and a GitHub Release with release notes. The Android workflow publishes a release when a commit on `main` is marked with `[release]`, or when a version tag such as `v0.10.0` is pushed.
-
-When permanent signing is configured, the release includes a signed APK suitable for updating an installation signed with the same key. Until then, releases contain source and notes only; debug APKs remain separate test artifacts.
-
-
-## ASTER Update
-
-ASTER checks GitHub Releases when the app starts, every 24 hours while it remains active, and on demand from **Settings → Check for updates**. When a newer release is found, the user can download its `ASTER-Browser.apk` asset and continue through Android's package installer. Android always requires user confirmation; silent installation is not supported.
-
-For updates to install over an existing copy, every release must be signed with the same permanent private key. Until repository signing is configured, debug APK releases are test builds and Android may reject them as updates to an already installed copy.
-
-## Direct APK downloads
-
-Major GitHub Releases include a directly downloadable Android APK named `ASTER-Browser.apk`.
+The Android project uses Gradle and Android Gradle Plugin. GitHub Actions builds the APK. See `.github/workflows/build-android.yml`.
