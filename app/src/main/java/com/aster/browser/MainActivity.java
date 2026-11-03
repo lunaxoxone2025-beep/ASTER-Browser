@@ -55,7 +55,7 @@ public class MainActivity extends Activity {
     private static final int DOWNLOAD_PERMISSION_REQUEST = 701;
     private static final int BACKUP_EXPORT_REQUEST = 8101;
     private static final int BACKUP_IMPORT_REQUEST = 8102;
-    private static final int MAX_BACKUP_BYTES = 2 * 1024 * 1024;
+    private static final int MAX_BACKUP_BYTES = 10 * 1024 * 1024;
 
     private final int BG = Color.rgb(15, 17, 23);
     private final int PANEL = Color.rgb(27, 31, 42);
@@ -581,15 +581,21 @@ public class MainActivity extends Activity {
                         Toast.makeText(this, "Could not open the file picker", Toast.LENGTH_LONG).show();
                     }
                 } else {
-                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                    intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.setType("application/json");
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    try {
-                        startActivityForResult(intent, BACKUP_IMPORT_REQUEST);
-                    } catch (Exception e) {
-                        Toast.makeText(this, "Could not open the file picker", Toast.LENGTH_LONG).show();
-                    }
+                    new AlertDialog.Builder(this)
+                        .setTitle("Import backup?")
+                        .setMessage("Importing replaces your current bookmarks, history, browser settings and open tabs. Export a backup first if you want to keep the current data.")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Choose file", (confirmDialog, whichAction) -> {
+                            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                            intent.addCategory(Intent.CATEGORY_OPENABLE);
+                            intent.setType("application/json");
+                            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                            try {
+                                startActivityForResult(intent, BACKUP_IMPORT_REQUEST);
+                            } catch (Exception e) {
+                                Toast.makeText(this, "Could not open the file picker", Toast.LENGTH_LONG).show();
+                            }
+                        }).show();
                 }
             }).show();
     }
@@ -723,7 +729,7 @@ public class MainActivity extends Activity {
             if (safe.size() >= 5000) break;
         }
         StringBuilder result = new StringBuilder();
-        for (String url : safe) result.append(url).append('\\n');
+        for (String url : safe) result.append(url).append('\n');
         return result.toString();
     }
 
