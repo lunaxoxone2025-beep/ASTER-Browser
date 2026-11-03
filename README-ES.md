@@ -4,7 +4,7 @@ Versión Android actual: **0.15.0**.
 
 ASTER es un navegador para Android en desarrollo, con pestañas, marcadores, historial, descargas y controles de privacidad. La nueva dirección visual utiliza tonos oscuros violetas, una página de inicio renovada y controles inspirados de forma general en navegadores modernos como Brave y Opera GX, manteniendo una identidad propia.
 
-## Motor y plataforma
+## ASTER Shield 0.15.0\n\nLa protección ahora combina varias listas de filtros y oculta algunos elementos publicitarios de las páginas, incluidos ciertos anuncios superpuestos de YouTube. Las listas se actualizan cada 24 horas o manualmente desde el panel Shield. Debido a las limitaciones de Android WebView y a los anuncios de vídeo servidos desde los mismos dominios que el contenido legítimo, no se garantiza el bloqueo de todos los anuncios de YouTube.\n\n## Motor y plataforma
 
 ASTER utiliza actualmente Android System WebView. No es un navegador Chromium independiente y, por tanto, algunas funciones avanzadas de otros navegadores no están disponibles.
 
