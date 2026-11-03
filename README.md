@@ -19,3 +19,9 @@ Backups stay on the storage location chosen by the user. They do not include coo
 ## ASTER Shield
 
 ASTER Shield is a lightweight request blocker implemented with Android WebView request interception. It includes a built-in set of known advertising and analytics hosts, a global enable/disable control, per-host exceptions, and session counters. Its compact built-in list is not a full filter-list engine and cannot remove all ads or cosmetic page elements.
+
+## Versioning and GitHub Releases
+
+Small fixes and internal refinements may be included in the next release. Significant feature updates receive a version bump and a GitHub Release with release notes. The Android workflow publishes a release when a commit on `main` is marked with `[release]`, or when a version tag such as `v0.10.0` is pushed.
+
+When permanent signing is configured, the release includes a signed APK suitable for updating an installation signed with the same key. Until then, releases contain source and notes only; debug APKs remain separate test artifacts.
