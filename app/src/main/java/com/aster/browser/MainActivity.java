@@ -78,7 +78,7 @@ public class MainActivity extends Activity {
     private static final long UPDATE_CHECK_INTERVAL = 24L * 60L * 60L * 1000L;
     private static final long UPDATE_CHECK_THROTTLE = 6L * 60L * 60L * 1000L;
 
-    // Lightweight built-in domains, not a complete EasyList/uBlock filter engine.
+    // Built-in fallback domains. Downloaded network filters provide broader coverage.
     private static final String[] SHIELD_BLOCKED_HOSTS = {
         "doubleclick.net", "googlesyndication.com", "googleadservices.com",
         "adservice.google.com", "adnxs.com", "adsrvr.org", "adform.net",
@@ -593,11 +593,34 @@ public class MainActivity extends Activity {
                     String old = prefs.getString("history", "");
                     String line = url + "\n";
                     if (!old.contains(line)) prefs.edit().putString("history", line + old).apply();
+                    injectCosmeticAdProtection(view, url);
                 }
                 saveSession();
             }
         });
         return w;
+    }
+
+
+    /**
+     * Cosmetic fallback for ad UI that cannot be identified by host blocking.
+     * This does not remove server-side/in-stream YouTube ads delivered from the
+     * same video domains as legitimate media.
+     */
+    private void injectCosmeticAdProtection(WebView view, String url) {
+        String host = normalizedHost(Uri.parse(url).getHost());
+        if (host == null) return;
+        String script = "(function(){try{"
+            + "if(window.__asterAdShieldInstalled)return;window.__asterAdShieldInstalled=true;"
+            + "var yt=/youtube\\.com$|youtube-nocookie\\.com$/.test(location.hostname);"
+            + "var css='ins.adsbygoogle, [id^=\\\"google_ads\\\"], iframe[src*=\\\"doubleclick.net\\\"], iframe[src*=\\\"googlesyndication.com\\\"], .ad-container, .ad-banner, .advertisement, .sponsored-ad{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;pointer-events:none!important;}';"
+            + "if(yt)css+= 'ytd-ad-slot-renderer,ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,ytd-in-feed-ad-layout-renderer,ytd-banner-promo-renderer,#player-ads,#masthead-ad,.video-ads,.ytp-ad-module,.ytp-ad-overlay-container{display:none!important;visibility:hidden!important;max-height:0!important;}';"
+            + "var st=document.createElement('style');st.textContent=css;(document.head||document.documentElement).appendChild(st);"
+            + "if(yt){var skip=function(){var b=document.querySelector('.ytp-ad-skip-button,.ytp-skip-ad-button,button.ytp-ad-skip-button-modern,.ytp-ad-skip-button-modern');if(b&&b.getClientRects().length)b.click();};"
+            + "skip();new MutationObserver(skip).observe(document.documentElement,{childList:true,subtree:true});}"
+            + "new MutationObserver(function(){var nodes=document.querySelectorAll('ins.adsbygoogle,[id^=google_ads],.ad-container,.ad-banner,.advertisement');for(var i=0;i<nodes.length;i++)nodes[i].style.setProperty('display','none','important');}).observe(document.documentElement,{childList:true,subtree:true});"
+            + "}catch(e){}})();";
+        view.evaluateJavascript(script, null);
     }
 
     private boolean shouldBlockRequest(WebView view, Uri uri, boolean isMainFrame) {
