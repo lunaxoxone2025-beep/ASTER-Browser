@@ -13,10 +13,11 @@ ASTER utiliza actualmente Android System WebView. No es un navegador Chromium in
 - Importa reglas de red basadas en dominios desde EasyList, EasyPrivacy, AdGuard Base, AdGuard Tracking Protection, AdGuard Mobile Ads y la lista de servidores publicitarios de Peter Lowe.
 - Mantiene las reglas en caché y actualiza las listas cada 24 horas cuando hay conexión.
 - Permite actualizar los filtros manualmente desde el panel Shield.
+- Aplica limpieza visual experimental en YouTube y pulsa controles de omitir anuncios cuando aparecen.
 - Oculta algunos espacios publicitarios y superposiciones de anuncios de YouTube, e intenta pulsar automáticamente el botón visible «Saltar anuncio».
 - Incluye protección global, excepciones por sitio y contadores de solicitudes bloqueadas.
 
-**Limitación importante:** la integración actual con WebView solo aplica reglas de red basadas en dominios. No aplica selectores cosméticos CSS, scriptlets ni todas las opciones avanzadas de ABP. Por eso puede bloquear muchas solicitudes de publicidad y rastreo, pero algunos anuncios o espacios vacíos pueden seguir apareciendo. No promete el mismo nivel de bloqueo que Brave.
+**Limitación importante:** Android WebView no ofrece los mismos controles de red y filtros cosméticos que un motor de navegador dedicado. YouTube puede servir anuncios de vídeo desde la misma infraestructura que el vídeo, por lo que no se pueden bloquear todos sin arriesgar la reproducción. Esta versión mejora el bloqueo, pero no equivale a uBlock Origin ni a Brave Shields.
 
 ## Página de inicio y pestañas
 
