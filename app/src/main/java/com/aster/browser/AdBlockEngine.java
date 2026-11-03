@@ -142,9 +142,9 @@ public final class AdBlockEngine {
             boolean success = parsed > 1000;
             if (success) {
                 StringBuilder b = new StringBuilder();
-                for (String host : newBlocked) b.append(host).append('\\n');
+                for (String host : newBlocked) b.append(host).append('\n');
                 StringBuilder a = new StringBuilder();
-                for (String host : newAllowed) a.append(host).append('\\n');
+                for (String host : newAllowed) a.append(host).append('\n');
                 prefs.edit().putString(PREF_RULES, b.toString()).putString(PREF_ALLOW, a.toString())
                     .putLong(PREF_UPDATED, System.currentTimeMillis()).apply();
                 blocked = Collections.unmodifiableSet(newBlocked);
