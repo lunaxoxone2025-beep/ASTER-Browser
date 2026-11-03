@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0] - 2026-11-03
+### Added
+- Added local JSON backup export through Android's document picker.
+- Backups include bookmarks, browsing history, homepage and search-engine settings, tab-restore preference, open tabs, and the selected tab.
+- Added backup import with format/version validation, URL filtering, tab limits, and a confirmation before replacing current browser data.
+- Kept backup files under the user's control; no account or remote storage is required.
+
+### Notes
+- Website cookies, passwords, and cached website data are not included in backups.
+- Android System WebView remains the rendering engine.
+
 ## [0.7.1] - 2026-11-02
 ### Changed
 - Prepared a persistent Android release-signing configuration so future APK updates can be installed over existing installations.
