@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.0] - 2026-11-03
+### Added
+- Introduced ASTER Shield, a lightweight WebView request blocker for a built-in set of known advertising and analytics domains.
+- Added global protection controls, per-host exceptions, per-page and session counters, and a blocked-domain list.
+- Included Shield preferences and per-site exceptions in JSON backups.
+
+### Notes
+- The built-in host list is intentionally lightweight and is not a full EasyList/uBlock filter engine.
+- Request interception cannot remove every ad, cosmetic element, or first-party tracking script.
+- Rendering still uses Android System WebView.
+
 ## [0.8.0] - 2026-11-03
 ### Added
 - Added local JSON backup export through Android's document picker.
