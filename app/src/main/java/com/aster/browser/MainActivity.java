@@ -780,32 +780,36 @@ public class MainActivity extends Activity {
         html.append("<form method='get' action='").append(searchAction).append("'>");
         html.append("<input name='q' type='search' placeholder='Search the web' autocomplete='off' aria-label='Search the web'>");
         html.append("<button type='submit'>Search</button></form>");
-        if (prefs.getBoolean("home_show_shortcuts", true)) html.append("<section class='section'><div class='heading'>Quick access</div><div class='sites'>");
-        appendStartCard(html, "Google", "G", "https://www.google.com");
-        appendStartCard(html, "YouTube", "▶", "https://www.youtube.com");
-        appendStartCard(html, "GitHub", "⌘", "https://github.com");
-        appendStartCard(html, "Wikipedia", "W", "https://www.wikipedia.org");
-        appendStartCard(html, "Reddit", "r", "https://www.reddit.com");
-        appendStartCard(html, "DuckDuckGo", "D", "https://duckduckgo.com");
-        if (prefs.getBoolean("home_show_shortcuts", true)) html.append("</div></section>");
+        if (prefs.getBoolean("home_show_shortcuts", true)) {
+            html.append("<section class='section'><div class='heading'>Quick access</div><div class='sites'>");
+            appendStartCard(html, "Google", "G", "https://www.google.com");
+            appendStartCard(html, "YouTube", "▶", "https://www.youtube.com");
+            appendStartCard(html, "GitHub", "⌘", "https://github.com");
+            appendStartCard(html, "Wikipedia", "W", "https://www.wikipedia.org");
+            appendStartCard(html, "Reddit", "r", "https://www.reddit.com");
+            appendStartCard(html, "DuckDuckGo", "D", "https://duckduckgo.com");
+            html.append("</div></section>");
+        }
 
         List<String> saved = new ArrayList<>();
         for (String line : prefs.getString("bookmarks", "").split("\\n")) {
             if (!line.trim().isEmpty() && isWebUrl(line.trim())) saved.add(line.trim());
             if (saved.size() == 4) break;
         }
-        if (prefs.getBoolean("home_show_bookmarks", true)) html.append("<section class='section'><div class='heading'>Bookmarks</div><div class='saved'>");
-        if (saved.isEmpty()) {
-            html.append("<div class='empty'>Pages you bookmark will appear here.</div>");
-        } else {
-            for (String url : saved) {
-                String label = Uri.parse(url).getHost();
-                if (label == null || label.isEmpty()) label = url;
-                html.append("<a href='").append(escapeHtml(url)).append("'>")
-                    .append(escapeHtml(label)).append("</a>");
+        if (prefs.getBoolean("home_show_bookmarks", true)) {
+            html.append("<section class='section'><div class='heading'>Bookmarks</div><div class='saved'>");
+            if (saved.isEmpty()) {
+                html.append("<div class='empty'>Pages you bookmark will appear here.</div>");
+            } else {
+                for (String url : saved) {
+                    String label = Uri.parse(url).getHost();
+                    if (label == null || label.isEmpty()) label = url;
+                    html.append("<a href='").append(escapeHtml(url)).append("'>")
+                        .append(escapeHtml(label)).append("</a>");
+                }
             }
+            html.append("</div></section>");
         }
-        if (prefs.getBoolean("home_show_bookmarks", true)) html.append("</div></section>");
         html.append("<div class='footer'>ASTER BROWSER</div></main></body></html>");
         target.setTag(HOME_PAGE);
         target.loadDataWithBaseURL("https://aster.start/", html.toString(), "text/html", "UTF-8", null);
