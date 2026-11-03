@@ -78,7 +78,7 @@ jobs:
           if [ "${{ steps.signing.outputs.ready }}" = "true" ]; then
             cp app/build/outputs/apk/release/app-release.apk ASTER-Browser.apk
           else
-            cp ASTER-Browser.apk ASTER-Browser.apk
+            cp app/build/outputs/apk/debug/app-debug.apk ASTER-Browser.apk
           fi
       - name: Upload signed APK artifact
         if: steps.signing.outputs.ready == 'true'
@@ -115,4 +115,4 @@ jobs:
 
             IMPORTANT: This APK is signed with a temporary debug key. It is for testing and may not install over an existing ASTER Browser build. Do not uninstall an existing installation unless you have backed up any data you need.
           files: |
-            app/build/outputs/apk/debug/app-debug.apk
+            ASTER-Browser.apk
