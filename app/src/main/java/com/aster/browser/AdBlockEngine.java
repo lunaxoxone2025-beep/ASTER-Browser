@@ -65,6 +65,11 @@ public final class AdBlockEngine {
             "connect.facebook.net", "pixel.facebook.com", "analytics.tiktok.com",
             "bat.bing.com", "clarity.ms", "hotjar.com", "segment.io",
             "cdn.segment.com", "api.segment.io", "mixpanel.com", "amplitude.com",
+            "amazon-adsystem.com", "ads-twitter.com", "ads-api.twitter.com",
+            "analytics.twitter.com", "advertising.com", "bidswitch.net",
+            "smartadserver.com", "lijit.com", "sharethrough.com", "yieldmo.com",
+            "33across.com", "bluekai.com", "exelator.com", "eyeota.net",
+            "demdex.net", "krxd.net", "agkn.com", "rlcdn.com",
             "pagead2.googlesyndication.com", "partner.googleadservices.com",
             "securepubads.g.doubleclick.net", "tpc.googlesyndication.com", "ads.youtube.com",
             "adsafeprotected.com", "advertising.com", "serving-sys.com", "smartadserver.com",
@@ -130,7 +135,8 @@ public final class AdBlockEngine {
                         String line;
                         while ((line = reader.readLine()) != null && parsed < MAX_RULES) {
                             String rule = line.trim().toLowerCase(Locale.ROOT);
-                            if (rule.isEmpty() || rule.startsWith("!") || rule.startsWith("[") || rule.startsWith("@@") && !ALLOW_RULE.matcher(rule).find()) continue;
+                            if (rule.isEmpty() || rule.startsWith("!") || rule.startsWith("#") || rule.startsWith("[")
+                                || rule.startsWith("@@") && !ALLOW_RULE.matcher(rule).find()) continue;
                             Matcher allow = ALLOW_RULE.matcher(rule);
                             Matcher block = BLOCK_RULE.matcher(rule);
                             if (allow.find()) {
@@ -138,7 +144,17 @@ public final class AdBlockEngine {
                                 if (host != null) newAllowed.add(host);
                             } else if (block.find()) {
                                 String host = normalize(block.group(1));
-                                if (host != null) { newBlocked.add(host); parsed++; }
+                                if (host != null && newBlocked.add(host)) parsed++;
+                            } else {
+                                String[] fields = rule.split("\\s+");
+                                if (fields.length >= 2 && (fields[0].equals("0.0.0.0") || fields[0].equals("127.0.0.1")
+                                    || fields[0].equals("::1") || fields[0].equals("0"))) {
+                                    for (int i = 1; i < fields.length && parsed < MAX_RULES; i++) {
+                                        String host = normalize(fields[i]);
+                                        if (host != null && !host.equals("localhost") && !host.endsWith(".localhost")
+                                            && !host.equals("local") && newBlocked.add(host)) parsed++;
+                                    }
+                                }
                             }
                         }
                     }
