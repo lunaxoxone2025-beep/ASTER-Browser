@@ -86,11 +86,11 @@ public class MainActivity extends Activity {
         "cdn.segment.com", "api.segment.io", "mixpanel.com", "amplitude.com"
     };
 
-    private final int BG = Color.rgb(15, 17, 23);
-    private final int PANEL = Color.rgb(27, 31, 42);
+    private final int BG = Color.rgb(13, 11, 18);
+    private final int PANEL = Color.rgb(30, 24, 39);
     private final int TEXT = Color.rgb(241, 244, 250);
-    private final int MUTED = Color.rgb(151, 161, 180);
-    private final int ACCENT = Color.rgb(255, 153, 74);
+    private final int MUTED = Color.rgb(174, 163, 190);
+    private final int ACCENT = Color.rgb(194, 112, 255);
 
     private LinearLayout root, toolbar, bottomBar;
     private FrameLayout webContainer;
@@ -328,8 +328,9 @@ public class MainActivity extends Activity {
         toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.setPadding(dp(10), dp(9), dp(10), dp(8));
+        toolbar.setBackgroundColor(BG);
 
-        TextView privacy = chromeButton("◈", 18, "ASTER privacy information");
+        TextView privacy = chromeButton("⛨", 18, "ASTER privacy information");
         privacy.setTextColor(ACCENT);
         LinearLayout.LayoutParams privacyParams = new LinearLayout.LayoutParams(dp(42), dp(46));
         privacyParams.rightMargin = dp(7);
@@ -385,7 +386,7 @@ public class MainActivity extends Activity {
         bottomBar = new LinearLayout(this);
         bottomBar.setGravity(Gravity.CENTER);
         bottomBar.setPadding(dp(8), dp(6), dp(8), dp(7));
-        bottomBar.setBackgroundColor(Color.rgb(19, 22, 29));
+        bottomBar.setBackgroundColor(Color.rgb(17, 13, 23));
         String[] labels = {"‹", "›", "⌂", "＋", "⋯"};
         String[] descriptions = {"Go back", "Go forward", "Home", "New tab", "Browser menu"};
         for (int i = 0; i < labels.length; i++) {
