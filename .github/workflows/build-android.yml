@@ -73,19 +73,26 @@ jobs:
       - name: Build debug APK for testing
         if: steps.signing.outputs.ready != 'true'
         run: gradle :app:assembleDebug
+      - name: Prepare stable APK filename
+        run: |
+          if [ "${{ steps.signing.outputs.ready }}" = "true" ]; then
+            cp app/build/outputs/apk/release/app-release.apk ASTER-Browser.apk
+          else
+            cp ASTER-Browser.apk ASTER-Browser.apk
+          fi
       - name: Upload signed APK artifact
         if: steps.signing.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ASTER-Browser-v${{ steps.version.outputs.version }}-signed
-          path: app/build/outputs/apk/release/app-release.apk
+          path: ASTER-Browser.apk
           retention-days: 30
       - name: Upload debug test APK artifact
         if: steps.signing.outputs.ready != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ASTER-Browser-v${{ steps.version.outputs.version }}-debug-test-only
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ASTER-Browser.apk
           retention-days: 30
       - name: Publish signed GitHub Release
         if: steps.release.outputs.publish == 'true' && steps.signing.outputs.ready == 'true'
@@ -95,7 +102,7 @@ jobs:
           name: ASTER Browser ${{ steps.version.outputs.release_tag }}
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: app/build/outputs/apk/release/app-release.apk
+          files: ASTER-Browser.apk
       - name: Publish source release with directly downloadable debug APK
         if: steps.release.outputs.publish == 'true' && steps.signing.outputs.ready != 'true'
         uses: softprops/action-gh-release@v2
@@ -104,7 +111,7 @@ jobs:
           name: ASTER Browser ${{ steps.version.outputs.release_tag }}
           generate_release_notes: true
           body: |
-            This major version is published with its source code, release notes, and a directly downloadable Android debug APK.
+            This major version is published with its source code, release notes, and a directly downloadable Android APK named ASTER-Browser.apk.
 
             IMPORTANT: This APK is signed with a temporary debug key. It is for testing and may not install over an existing ASTER Browser build. Do not uninstall an existing installation unless you have backed up any data you need.
           files: |
