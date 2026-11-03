@@ -263,6 +263,7 @@ public class MainActivity extends Activity {
             return;
         }
         try {
+            prefs.edit().putLong("update_download_id", -1L).apply();
             Intent install = new Intent(Intent.ACTION_VIEW);
             install.setDataAndType(apkUri, "application/vnd.android.package-archive");
             install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -1482,6 +1483,7 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        updateHandler.removeCallbacks(periodicUpdateCheck);
         saveSession();
         for (WebView tab : tabs) tab.onPause();
         super.onPause();
@@ -1489,6 +1491,10 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        long pendingUpdate = prefs.getLong("update_download_id", -1L);
+        if (pendingUpdate >= 0 && (Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls())) {
+            openDownloadedUpdate(pendingUpdate);
+        }
         checkForUpdates(false);
         updateHandler.removeCallbacks(periodicUpdateCheck);
         updateHandler.postDelayed(periodicUpdateCheck, UPDATE_CHECK_INTERVAL);
