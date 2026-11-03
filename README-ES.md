@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Versión Android actual: **0.14.0**.
+Versión Android actual: **0.15.0**.
 
 ASTER es un navegador para Android en desarrollo, con pestañas, marcadores, historial, descargas y controles de privacidad. La nueva dirección visual utiliza tonos oscuros violetas, una página de inicio renovada y controles inspirados de forma general en navegadores modernos como Brave y Opera GX, manteniendo una identidad propia.
 
@@ -10,9 +10,10 @@ ASTER utiliza actualmente Android System WebView. No es un navegador Chromium in
 
 ## ASTER Shield — bloqueo de anuncios y rastreadores
 
-- Importa reglas de red basadas en dominios compatibles desde EasyList y EasyPrivacy.
-- Mantiene reglas locales en caché y actualiza las listas semanalmente cuando hay conexión.
+- Importa reglas de red basadas en dominios desde EasyList, EasyPrivacy, AdGuard Base, AdGuard Tracking Protection, AdGuard Mobile Ads y la lista de servidores publicitarios de Peter Lowe.
+- Mantiene las reglas en caché y actualiza las listas cada 24 horas cuando hay conexión.
 - Permite actualizar los filtros manualmente desde el panel Shield.
+- Oculta algunos espacios publicitarios y superposiciones de anuncios de YouTube, e intenta pulsar automáticamente el botón visible «Saltar anuncio».
 - Incluye protección global, excepciones por sitio y contadores de solicitudes bloqueadas.
 
 **Limitación importante:** la integración actual con WebView solo aplica reglas de red basadas en dominios. No aplica selectores cosméticos CSS, scriptlets ni todas las opciones avanzadas de ABP. Por eso puede bloquear muchas solicitudes de publicidad y rastreo, pero algunos anuncios o espacios vacíos pueden seguir apareciendo. No promete el mismo nivel de bloqueo que Brave.
