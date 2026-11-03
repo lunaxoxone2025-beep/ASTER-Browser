@@ -11,7 +11,7 @@
         android:label="ASTER Browser"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:theme="@style/ASTERTheme"
         android:usesCleartextTraffic="false">
         <activity
             android:name=".MainActivity"
