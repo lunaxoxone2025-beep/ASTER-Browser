@@ -388,8 +388,16 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         if (root != null) root.setBackgroundColor(BG);
-        if (toolbar != null) toolbar.setBackgroundColor(
-            isLiquidGlassTheme() ? Color.argb(150, 18, 27, 46) : BG);
+        if (toolbar != null) {
+            toolbar.setBackgroundColor(isLiquidGlassTheme() ? Color.argb(150, 18, 27, 46) : BG);
+            for (int i = 0; i < toolbar.getChildCount(); i++) {
+                View child = toolbar.getChildAt(i);
+                if (child != address) {
+                    child.setBackground(rounded(PANEL, 16));
+                    if (child instanceof TextView) ((TextView) child).setTextColor(ACCENT);
+                }
+            }
+        }
         if (address != null) {
             address.setTextColor(TEXT);
             address.setHintTextColor(MUTED);
@@ -438,7 +446,6 @@ public class MainActivity extends Activity {
                 applySelectedTheme(values[which]);
             })
             .setNegativeButton("Close", null)
-            .setMessage("Liquid Glass uses translucent surfaces and fine highlights. The amount of system blur depends on Android and the device.")
             .show();
     }
 
@@ -2089,7 +2096,10 @@ public class MainActivity extends Activity {
         }
         if (allowed) {
             request.grant(resources);
-            rememberSitePermission("Camera/Microphone", origin);
+            for (String resource : resources) {
+                if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) rememberSitePermission("Camera", origin);
+                if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) rememberSitePermission("Microphone", origin);
+            }
         } else {
             request.deny();
             Toast.makeText(this, "Android permission was not granted", Toast.LENGTH_SHORT).show();
@@ -2176,7 +2186,11 @@ public class MainActivity extends Activity {
             })
             .setPositiveButton("Clear all location grants", (d, w) -> {
                 GeolocationPermissions.getInstance().clearAll();
-                prefs.edit().remove("site_permission_log").apply();
+                Set<String> updated = new LinkedHashSet<>(prefs.getStringSet("site_permission_log", new LinkedHashSet<>()));
+                Set<String> retained = new LinkedHashSet<>();
+                for (String entry : updated) if (!entry.startsWith("Location||")) retained.add(entry);
+                if (retained.isEmpty()) prefs.edit().remove("site_permission_log").apply();
+                else prefs.edit().putStringSet("site_permission_log", retained).apply();
                 Toast.makeText(this, "Website location grants cleared", Toast.LENGTH_SHORT).show();
             })
             .setNeutralButton("Android app permissions", (d, w) -> openAndroidPermissionSettings())
