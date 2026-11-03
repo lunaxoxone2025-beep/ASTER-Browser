@@ -35,6 +35,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.ValueCallback;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -70,6 +71,7 @@ public class MainActivity extends Activity {
     private static final int DOWNLOAD_PERMISSION_REQUEST = 701;
     private static final int BACKUP_EXPORT_REQUEST = 8101;
     private static final int BACKUP_IMPORT_REQUEST = 8102;
+    private static final int FILE_CHOOSER_REQUEST = 8103;
     private static final int MAX_BACKUP_BYTES = 10 * 1024 * 1024;
     private static final String RELEASES_API = "https://api.github.com/repos/lunaxoxone2025-beep/ASTER-Browser/releases/latest";
     private static final String UPDATE_APK_NAME = "ASTER-Browser.apk";
@@ -105,6 +107,7 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private AdBlockEngine adBlockEngine;
     private AlertDialog pendingTabsDialog;
+    private ValueCallback<Uri[]> filePathCallback;
     private final Set<WebView> readerModeTabs = Collections.newSetFromMap(new ConcurrentHashMap<WebView, Boolean>());
     private final Map<WebView, String> topLevelHosts = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<WebView, AtomicInteger> pageBlockedCounts = new ConcurrentHashMap<>();
@@ -136,10 +139,53 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("aster", MODE_PRIVATE);
         adBlockEngine = new AdBlockEngine(this);
         buildUi();
-        if (!restoreSession()) addTab(HOME_PAGE);
+        boolean restored = restoreSession();
+        String incomingUrl = getIntent() == null ? null : getIntent().getDataString();
+        if (isBackupWebUrl(incomingUrl)) addTab(incomingUrl);
+        else if (!restored) addTab(HOME_PAGE);
         registerUpdateReceiver();
         checkForUpdates(false);
         if (adBlockEngine.needsUpdate()) adBlockEngine.updateAsync(null);
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String incomingUrl = intent == null ? null : intent.getDataString();
+        if (isBackupWebUrl(incomingUrl)) {
+            if (tabs.size() < MAX_TABS) addTab(incomingUrl);
+            else {
+                current().loadUrl(incomingUrl);
+                Toast.makeText(this, "Opened in the current tab because the tab limit was reached", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.isCtrlPressed()) {
+            int key = event.getKeyCode();
+            if (key == KeyEvent.KEYCODE_L) {
+                address.requestFocus();
+                address.selectAll();
+                ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+                    .showSoftInput(address, InputMethodManager.SHOW_IMPLICIT);
+                return true;
+            }
+            if (key == KeyEvent.KEYCODE_T) { addTab(HOME_PAGE); return true; }
+            if (key == KeyEvent.KEYCODE_W) { closeTab(); return true; }
+            if (key == KeyEvent.KEYCODE_R) { current().reload(); return true; }
+            if (key == KeyEvent.KEYCODE_TAB && tabs.size() > 1) {
+                int direction = event.isShiftPressed() ? -1 : 1;
+                selectTab((active + direction + tabs.size()) % tabs.size());
+                return true;
+            }
+        }
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_ESCAPE
+            && !readerModeTabs.isEmpty() && readerModeTabs.contains(current())) {
+            toggleReaderMode();
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     private void registerUpdateReceiver() {
@@ -478,6 +524,20 @@ public class MainActivity extends Activity {
             confirmDownload(url, userAgent, contentDisposition, mimeType));
 
         w.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (filePathCallback != null) filePathCallback.onReceiveValue(null);
+                filePathCallback = callback;
+                try {
+                    Intent chooser = params.createIntent();
+                    startActivityForResult(chooser, FILE_CHOOSER_REQUEST);
+                    return true;
+                } catch (Exception e) {
+                    filePathCallback = null;
+                    Toast.makeText(MainActivity.this, "No file picker is available on this device", Toast.LENGTH_LONG).show();
+                    return false;
+                }
+            }
+
             @Override public void onProgressChanged(WebView view, int progress) {
                 if (view == current()) {
                     progressBar.setVisibility(progress >= 100 ? View.GONE : View.VISIBLE);
@@ -1086,6 +1146,7 @@ public class MainActivity extends Activity {
             return;
         }
         WebView closing = tabs.remove(index);
+        readerModeTabs.remove(closing);
         topLevelHosts.remove(closing);
         pageBlockedCounts.remove(closing);
         webContainer.removeView(closing);
@@ -1224,6 +1285,15 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == FILE_CHOOSER_REQUEST) {
+            if (filePathCallback != null) {
+                Uri[] results = resultCode == RESULT_OK && data != null
+                    ? WebChromeClient.FileChooserParams.parseResult(resultCode, data) : null;
+                filePathCallback.onReceiveValue(results);
+                filePathCallback = null;
+            }
+            return;
+        }
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri selectedFile = data.getData();
         if (requestCode == BACKUP_EXPORT_REQUEST) exportBackup(selectedFile);
@@ -1256,6 +1326,13 @@ public class MainActivity extends Activity {
             settings.put("restore_tabs", prefs.getBoolean("restore_tabs", true));
             settings.put("shield_enabled", prefs.getBoolean("shield_enabled", true));
             settings.put("shield_site_exceptions", prefs.getString("shield_site_exceptions", ""));
+            settings.put("desktop_site", prefs.getBoolean("desktop_site", false));
+            settings.put("text_zoom", prefs.getInt("text_zoom", 100));
+            settings.put("translate_language", prefs.getString("translate_language", "es"));
+            settings.put("home_show_branding", prefs.getBoolean("home_show_branding", true));
+            settings.put("home_show_shortcuts", prefs.getBoolean("home_show_shortcuts", true));
+            settings.put("home_show_bookmarks", prefs.getBoolean("home_show_bookmarks", true));
+            settings.put("home_theme", prefs.getString("home_theme", "violet"));
             backup.put("settings", settings);
 
             try (OutputStream output = getContentResolver().openOutputStream(destination, "w")) {
@@ -1314,6 +1391,13 @@ public class MainActivity extends Activity {
             JSONArray safeTabs = new JSONArray();
             for (String url : restoredTabs) safeTabs.put(url);
 
+            String translateLanguage = settings.optString("translate_language", "es");
+            if (!java.util.Arrays.asList("es", "en", "sl", "ja", "ko", "fr", "de").contains(translateLanguage)) translateLanguage = "es";
+            String homeTheme = settings.optString("home_theme", "violet");
+            if (!java.util.Arrays.asList("violet", "midnight", "ocean", "crimson").contains(homeTheme)) homeTheme = "violet";
+            int textZoom = settings.optInt("text_zoom", 100);
+            if (textZoom != 85 && textZoom != 100 && textZoom != 115 && textZoom != 130 && textZoom != 150) textZoom = 100;
+
             prefs.edit()
                 .putString("bookmarks", bookmarks)
                 .putString("history", history)
@@ -1322,6 +1406,13 @@ public class MainActivity extends Activity {
                 .putBoolean("restore_tabs", settings.optBoolean("restore_tabs", true))
                 .putBoolean("shield_enabled", settings.optBoolean("shield_enabled", true))
                 .putString("shield_site_exceptions", sanitizeHostLines(settings.optString("shield_site_exceptions", "")))
+                .putBoolean("desktop_site", settings.optBoolean("desktop_site", false))
+                .putInt("text_zoom", textZoom)
+                .putString("translate_language", translateLanguage)
+                .putBoolean("home_show_branding", settings.optBoolean("home_show_branding", true))
+                .putBoolean("home_show_shortcuts", settings.optBoolean("home_show_shortcuts", true))
+                .putBoolean("home_show_bookmarks", settings.optBoolean("home_show_bookmarks", true))
+                .putString("home_theme", homeTheme)
                 .putString("session_tabs", safeTabs.toString())
                 .putInt("active_tab", restoredActive)
                 .apply();
@@ -1797,6 +1888,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         updateHandler.removeCallbacks(periodicUpdateCheck);
+        if (filePathCallback != null) { filePathCallback.onReceiveValue(null); filePathCallback = null; }
         if (updateReceiverRegistered) {
             try { unregisterReceiver(updateDownloadReceiver); } catch (Exception ignored) {}
             updateReceiverRegistered = false;
