@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.BroadcastReceiver;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.res.Configuration;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -103,6 +104,8 @@ public class MainActivity extends Activity {
     private int active = 0;
     private SharedPreferences prefs;
     private AdBlockEngine adBlockEngine;
+    private AlertDialog pendingTabsDialog;
+    private final Set<WebView> readerModeTabs = Collections.newSetFromMap(new ConcurrentHashMap<WebView, Boolean>());
     private final Map<WebView, String> topLevelHosts = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<WebView, AtomicInteger> pageBlockedCounts = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicInteger> blockedDomainCounts = new ConcurrentHashMap<>();
@@ -421,6 +424,26 @@ public class MainActivity extends Activity {
             });
         }
         root.addView(bottomBar);
+        applyResponsiveLayout();
+    }
+
+    private void applyResponsiveLayout() {
+        boolean expanded = getResources().getConfiguration().screenWidthDp >= 600;
+        if (toolbar != null) toolbar.setPadding(dp(expanded ? 20 : 10), dp(expanded ? 14 : 9), dp(expanded ? 20 : 10), dp(expanded ? 12 : 8));
+        if (address != null) address.setTextSize(expanded ? 16 : 14);
+        if (bottomBar != null && bottomBar.getLayoutParams() instanceof LinearLayout.LayoutParams) {
+            LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) bottomBar.getLayoutParams();
+            params.width = expanded ? Math.max(dp(420), Math.min(dp(620), getResources().getDisplayMetrics().widthPixels - dp(48))) : -1;
+            params.height = dp(expanded ? 64 : 60);
+            params.gravity = Gravity.CENTER_HORIZONTAL;
+            bottomBar.setLayoutParams(params);
+            bottomBar.setPadding(dp(expanded ? 18 : 8), dp(6), dp(expanded ? 18 : 8), dp(7));
+        }
+    }
+
+    @Override public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        applyResponsiveLayout();
     }
 
     private WebView current() {
@@ -433,6 +456,8 @@ public class MainActivity extends Activity {
 
         WebSettings settings = w.getSettings();
         settings.setJavaScriptEnabled(true);
+        settings.setTextZoom(prefs.getInt("text_zoom", 100));
+        applyDesktopUserAgent(settings);
         settings.setDomStorageEnabled(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
@@ -468,6 +493,7 @@ public class MainActivity extends Activity {
 
         w.setWebViewClient(new WebViewClient() {
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                readerModeTabs.remove(view);
                 if (!"https://aster.start/".equals(url)) view.setTag(null);
                 String host = normalizedHost(Uri.parse(url).getHost());
                 if (host == null) topLevelHosts.remove(view);
@@ -485,6 +511,10 @@ public class MainActivity extends Activity {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String scheme = uri.getScheme();
+                if ("aster-reader-exit".equalsIgnoreCase(scheme)) {
+                    readerModeTabs.remove(view);
+                    return true;
+                }
                 if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, uri));
@@ -1128,6 +1158,15 @@ public class MainActivity extends Activity {
         addMenuTile(row5, "⌫", "Clear browsing data", dialog, () -> confirmClearBrowsingData());
         panel.addView(row5);
 
+        LinearLayout row6 = new LinearLayout(this);
+        addMenuTile(row6, "▣", prefs.getBoolean("desktop_site", false) ? "Mobile site" : "Desktop site", dialog, () -> toggleDesktopSite());
+        addMenuTile(row6, "☷", readerModeTabs.contains(current()) ? "Exit reader" : "Reader mode", dialog, () -> toggleReaderMode());
+        panel.addView(row6);
+
+        LinearLayout row7 = new LinearLayout(this);
+        addMenuTile(row7, "文", "Translate page", dialog, () -> translateCurrentPage());
+        panel.addView(row7);
+
         dialog.show();
     }
 
@@ -1349,6 +1388,7 @@ public class MainActivity extends Activity {
     private void rebuildTabs(List<String> urls, int selectedIndex) {
         for (WebView tab : tabs) {
             tab.stopLoading();
+            readerModeTabs.remove(tab);
             topLevelHosts.remove(tab);
             pageBlockedCounts.remove(tab);
             webContainer.removeView(tab);
@@ -1415,6 +1455,9 @@ public class MainActivity extends Activity {
             "Search engine: " + getSearchEngineName(),
             "Homepage: " + homepage,
             "Customize start page",
+            "Desktop site: " + (prefs.getBoolean("desktop_site", false) ? "On" : "Off"),
+            "Text size: " + prefs.getInt("text_zoom", 100) + "%",
+            "Translation language: " + translationLanguageName(prefs.getString("translate_language", "es")),
             "Restore tabs on startup: " + (prefs.getBoolean("restore_tabs", true) ? "On" : "Off"),
             "Check for updates",
             "About ASTER Browser"
@@ -1423,17 +1466,125 @@ public class MainActivity extends Activity {
             if (which == 0) chooseSearchEngine();
             else if (which == 1) editHomepage();
             else if (which == 2) showStartPageCustomization();
-            else if (which == 3) chooseRestoreTabs();
-            else if (which == 4) {
+            else if (which == 3) toggleDesktopSite();
+            else if (which == 4) chooseTextSize();
+            else if (which == 5) chooseTranslationLanguage();
+            else if (which == 6) chooseRestoreTabs();
+            else if (which == 7) {
                 Toast.makeText(this, "Checking for updates…", Toast.LENGTH_SHORT).show();
                 checkForUpdates(true);
-            } else if (which == 5) {
+            } else if (which == 8) {
                 new AlertDialog.Builder(this).setTitle("ASTER Browser")
-                    .setMessage("Version " + BuildConfig.VERSION_NAME + "\\nAutomatic update checks are enabled. Updates always require your confirmation in Android.")
+                    .setMessage("Version " + BuildConfig.VERSION_NAME + "\nAdaptive layout, reader mode, desktop site mode and translation are available. Updates always require your confirmation in Android.")
                     .setPositiveButton("Check now", (dialog, button) -> checkForUpdates(true))
                     .setNegativeButton("Close", null).show();
             }
         }).show();
+    }
+
+    private void chooseTextSize() {
+        final int[] values = {85, 100, 115, 130, 150};
+        String[] labels = {"85% — Compact", "100% — Normal", "115% — Large", "130% — Very large", "150% — Extra large"};
+        int currentValue = prefs.getInt("text_zoom", 100);
+        int checked = 1;
+        for (int i = 0; i < values.length; i++) if (values[i] == currentValue) checked = i;
+        new AlertDialog.Builder(this).setTitle("Web page text size")
+            .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                prefs.edit().putInt("text_zoom", values[which]).apply();
+                for (WebView tab : tabs) tab.getSettings().setTextZoom(values[which]);
+                dialog.dismiss();
+            }).setNegativeButton("Cancel", null).show();
+    }
+
+    private void chooseTranslationLanguage() {
+        String[] labels = {"Spanish", "English", "Slovenian", "Japanese", "Korean", "French", "German"};
+        String[] values = {"es", "en", "sl", "ja", "ko", "fr", "de"};
+        String currentValue = prefs.getString("translate_language", "es");
+        int checked = 0;
+        for (int i = 0; i < values.length; i++) if (values[i].equals(currentValue)) checked = i;
+        new AlertDialog.Builder(this).setTitle("Translate pages into")
+            .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                prefs.edit().putString("translate_language", values[which]).apply();
+                dialog.dismiss();
+            }).setNegativeButton("Cancel", null).show();
+    }
+
+    private String translationLanguageName(String code) {
+        String[] values = {"es", "en", "sl", "ja", "ko", "fr", "de"};
+        String[] labels = {"Spanish", "English", "Slovenian", "Japanese", "Korean", "French", "German"};
+        for (int i = 0; i < values.length; i++) if (values[i].equals(code)) return labels[i];
+        return "Spanish";
+    }
+
+    private void toggleDesktopSite() {
+        boolean enabled = !prefs.getBoolean("desktop_site", false);
+        prefs.edit().putBoolean("desktop_site", enabled).apply();
+        for (WebView tab : tabs) {
+            applyDesktopUserAgent(tab.getSettings());
+            if (isWebUrl(tab.getUrl())) tab.reload();
+        }
+        Toast.makeText(this, enabled ? "Desktop site enabled" : "Mobile site enabled", Toast.LENGTH_SHORT).show();
+    }
+
+    private void applyDesktopUserAgent(WebSettings settings) {
+        String mobileAgent = WebSettings.getDefaultUserAgent(this);
+        if (!prefs.getBoolean("desktop_site", false)) {
+            settings.setUserAgentString(mobileAgent);
+            return;
+        }
+        String desktopAgent = mobileAgent.replaceFirst("\\(Linux; Android [^)]*\\)", "(X11; Linux x86_64)")
+            .replace(" Mobile", "");
+        settings.setUserAgentString(desktopAgent);
+    }
+
+    private void toggleReaderMode() {
+        if (tabs.isEmpty() || !isWebUrl(current().getUrl())) {
+            Toast.makeText(this, "Open an article or web page first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        WebView target = current();
+        if (readerModeTabs.contains(target)) {
+            readerModeTabs.remove(target);
+            target.evaluateJavascript("(function(){var e=document.getElementById('__aster_reader');if(e)e.remove();return true;})()", null);
+            return;
+        }
+        String script = "(function(){"
+            + "if(document.getElementById('__aster_reader'))return 'ASTER_READER_READY';"
+            + "var source=document.querySelector('article')||document.querySelector('main')||document.body;"
+            + "var text=(source&&source.innerText?source.innerText:document.body.innerText||'').trim();"
+            + "if(text.length<160)return 'ASTER_READER_SHORT';"
+            + "var overlay=document.createElement('div');overlay.id='__aster_reader';"
+            + "overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;overflow:auto;background:#f4f0e8;color:#25221e;padding:28px max(22px,calc((100vw - 720px)/2));font:18px/1.75 Georgia,serif;box-sizing:border-box;';"
+            + "var bar=document.createElement('div');bar.style.cssText='max-width:720px;margin:0 auto 24px;display:flex;justify-content:space-between;align-items:center;font:12px Arial,sans-serif;color:#6b6258;';"
+            + "var brand=document.createElement('span');brand.textContent='ASTER READER';"
+            + "var close=document.createElement('button');close.textContent='Close reader  ×';close.style.cssText='border:0;border-radius:18px;padding:10px 15px;background:#ded6c9;color:#29241e;font-weight:bold;';"
+            + "close.onclick=function(){overlay.remove();window.location.href='aster-reader-exit://close';};bar.appendChild(brand);bar.appendChild(close);overlay.appendChild(bar);"
+            + "var article=document.createElement('article');article.style.cssText='max-width:720px;margin:0 auto;white-space:pre-wrap;overflow-wrap:anywhere;';"
+            + "var title=document.createElement('h1');title.textContent=document.title||location.hostname;title.style.cssText='font: bold 32px/1.2 Georgia,serif;margin:0 0 26px;';"
+            + "var body=document.createElement('div');body.textContent=text.slice(0,60000);article.appendChild(title);article.appendChild(body);overlay.appendChild(article);document.body.appendChild(overlay);return 'ASTER_READER_READY';"
+            + "})()";
+        target.evaluateJavascript(script, result -> {
+            if (result != null && result.contains("ASTER_READER_READY")) {
+                readerModeTabs.add(target);
+                Toast.makeText(this, "Reader mode enabled", Toast.LENGTH_SHORT).show();
+            } else Toast.makeText(this, "This page has no readable article text", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    private void translateCurrentPage() {
+        String url = current().getUrl();
+        if (!isWebUrl(url)) {
+            Toast.makeText(this, "Open a website first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            String language = prefs.getString("translate_language", "es");
+            String translateUrl = "https://translate.google.com/translate?sl=auto&tl="
+                + language + "&u=" + URLEncoder.encode(url, "UTF-8");
+            addTab(translateUrl);
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not prepare translation", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void chooseSearchEngine() {
@@ -1652,6 +1803,7 @@ public class MainActivity extends Activity {
         }
         saveSession();
         for (WebView w : tabs) {
+            readerModeTabs.remove(w);
             w.stopLoading();
             topLevelHosts.remove(w);
             pageBlockedCounts.remove(w);
