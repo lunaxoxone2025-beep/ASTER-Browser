@@ -24,8 +24,8 @@ public final class AdBlockEngine {
     private static final String PREF_RULES = "adblock_domain_rules";
     private static final String PREF_ALLOW = "adblock_allow_rules";
     private static final String PREF_UPDATED = "adblock_last_update";
-    private static final long UPDATE_INTERVAL = 7L * 24L * 60L * 60L * 1000L;
-    private static final int MAX_RULES = 120000;
+    private static final long UPDATE_INTERVAL = 24L * 60L * 60L * 1000L;
+    private static final int MAX_RULES = 200000;
     private static final Pattern BLOCK_RULE = Pattern.compile("^\\|\\|([a-z0-9.-]+)\\^");
     private static final Pattern ALLOW_RULE = Pattern.compile("^@@\\|\\|([a-z0-9.-]+)\\^");
     private final SharedPreferences prefs;
@@ -64,7 +64,12 @@ public final class AdBlockEngine {
             "scorecardresearch.com", "google-analytics.com", "analytics.google.com",
             "connect.facebook.net", "pixel.facebook.com", "analytics.tiktok.com",
             "bat.bing.com", "clarity.ms", "hotjar.com", "segment.io",
-            "cdn.segment.com", "api.segment.io", "mixpanel.com", "amplitude.com"
+            "cdn.segment.com", "api.segment.io", "mixpanel.com", "amplitude.com",
+            "pagead2.googlesyndication.com", "partner.googleadservices.com",
+            "securepubads.g.doubleclick.net", "tpc.googlesyndication.com", "ads.youtube.com",
+            "adsafeprotected.com", "advertising.com", "serving-sys.com", "smartadserver.com",
+            "lijit.com", "yieldmo.com", "sharethrough.com", "33across.com", "media.net",
+            "revcontent.com", "mgid.com", "zedo.com", "adroll.com", "moatads.com", "doubleverify.com"
         };
         Collections.addAll(target, hosts);
     }
@@ -106,7 +111,11 @@ public final class AdBlockEngine {
             int parsed = 0;
             String[] sources = {
                 "https://easylist.to/easylist/easylist.txt",
-                "https://easylist.to/easylist/easyprivacy.txt"
+                "https://easylist.to/easylist/easyprivacy.txt",
+                "https://filters.adtidy.org/extension/ublock/filters/2.txt",
+                "https://filters.adtidy.org/extension/ublock/filters/3.txt",
+                "https://filters.adtidy.org/extension/ublock/filters/11.txt",
+                "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext"
             };
             for (String source : sources) {
                 HttpURLConnection connection = null;
@@ -114,7 +123,7 @@ public final class AdBlockEngine {
                     connection = (HttpURLConnection) new URL(source).openConnection();
                     connection.setConnectTimeout(12000);
                     connection.setReadTimeout(20000);
-                    connection.setRequestProperty("User-Agent", "ASTER-Browser/0.14.0");
+                    connection.setRequestProperty("User-Agent", "ASTER-Browser/0.15.0");
                     connection.setRequestProperty("Accept", "text/plain");
                     if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) continue;
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), "UTF-8"))) {
