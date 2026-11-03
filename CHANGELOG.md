@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.13.0] - 2026-11-03
+### Added
+- Added start-page customization: independently show or hide ASTER branding, quick-access shortcuts, and saved bookmarks.
+- Added four start-page background themes: Violet, Midnight, Ocean, and Crimson.
+- Rebuilt the tab switcher as a two-column visual card grid with active-tab state, page title, domain, close controls, and a prominent new-tab action.
+- Kept ASTER Shield accessible directly from the browser toolbar alongside per-site protection controls.
+
+### Fixed
+- Enabled Android BuildConfig generation, fixing the previous release build's missing BuildConfig compilation error.
+- Corrected optional start-page sections so hidden shortcuts and bookmarks are not rendered.
+
+### Limitations
+- The browser continues to use Android System WebView; the visual redesign does not make it a standalone Chromium engine.
+- ASTER Shield applies supported domain network rules, not full cosmetic or scriptlet filtering.
+
+
 ## [0.12.0] - 2026-11-03
 ### Added
 - Replaced ASTER Shield's small static-only block check with a cached domain-rule engine that imports supported network rules and exceptions from EasyList and EasyPrivacy.
