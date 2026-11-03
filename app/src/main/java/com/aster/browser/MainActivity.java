@@ -1383,6 +1383,7 @@ public class MainActivity extends Activity {
                     .putBoolean("home_show_shortcuts", selected[1])
                     .putBoolean("home_show_bookmarks", selected[2])
                     .apply();
+                refreshStartPages();
                 chooseStartPageTheme();
             }).show();
     }
