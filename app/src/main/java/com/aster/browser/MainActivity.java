@@ -25,6 +25,7 @@ import android.webkit.DownloadListener;
 import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebStorage;
 import android.webkit.WebView;
@@ -39,15 +40,21 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends Activity {
     private static final int MAX_TABS = 8;
@@ -56,6 +63,18 @@ public class MainActivity extends Activity {
     private static final int BACKUP_EXPORT_REQUEST = 8101;
     private static final int BACKUP_IMPORT_REQUEST = 8102;
     private static final int MAX_BACKUP_BYTES = 10 * 1024 * 1024;
+
+    // Lightweight built-in domains, not a complete EasyList/uBlock filter engine.
+    private static final String[] SHIELD_BLOCKED_HOSTS = {
+        "doubleclick.net", "googlesyndication.com", "googleadservices.com",
+        "adservice.google.com", "adnxs.com", "adsrvr.org", "adform.net",
+        "taboola.com", "outbrain.com", "criteo.com", "rubiconproject.com",
+        "pubmatic.com", "openx.net", "casalemedia.com", "quantserve.com",
+        "scorecardresearch.com", "google-analytics.com", "analytics.google.com",
+        "connect.facebook.net", "pixel.facebook.com", "analytics.tiktok.com",
+        "bat.bing.com", "clarity.ms", "hotjar.com", "segment.io",
+        "cdn.segment.com", "api.segment.io", "mixpanel.com", "amplitude.com"
+    };
 
     private final int BG = Color.rgb(15, 17, 23);
     private final int PANEL = Color.rgb(27, 31, 42);
@@ -72,6 +91,10 @@ public class MainActivity extends Activity {
     private final List<WebView> tabs = new ArrayList<>();
     private int active = 0;
     private SharedPreferences prefs;
+    private final Map<WebView, String> topLevelHosts = new ConcurrentHashMap<>();
+    private final Map<WebView, AtomicInteger> pageBlockedCounts = new ConcurrentHashMap<>();
+    private final Map<String, AtomicInteger> blockedDomainCounts = new ConcurrentHashMap<>();
+    private final AtomicInteger totalBlockedRequests = new AtomicInteger(0);
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -140,10 +163,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams privacyParams = new LinearLayout.LayoutParams(dp(42), dp(46));
         privacyParams.rightMargin = dp(7);
         toolbar.addView(privacy, privacyParams);
-        privacy.setOnClickListener(v -> new AlertDialog.Builder(this)
-            .setTitle("ASTER privacy")
-            .setMessage("Third-party cookies are disabled and mixed insecure content is blocked. Advanced tracker blocking is not available yet.")
-            .setPositiveButton("OK", null).show());
+        privacy.setOnClickListener(v -> showPrivacyPanel());
 
         address = new EditText(this);
         address.setSingleLine(true);
@@ -276,6 +296,17 @@ public class MainActivity extends Activity {
         w.setWebViewClient(new WebViewClient() {
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 if (!"https://aster.start/".equals(url)) view.setTag(null);
+                String host = normalizedHost(Uri.parse(url).getHost());
+                if (host == null) topLevelHosts.remove(view);
+                else topLevelHosts.put(view, host);
+                pageBlockedCounts.put(view, new AtomicInteger(0));
+            }
+
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                if (shouldBlockRequest(view, request.getUrl(), request.isForMainFrame())) {
+                    return blockedWebResponse();
+                }
+                return super.shouldInterceptRequest(view, request);
             }
 
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -291,6 +322,8 @@ public class MainActivity extends Activity {
             }
 
             @Override public void onPageFinished(WebView view, String url) {
+                String host = normalizedHost(Uri.parse(url).getHost());
+                if (host != null) topLevelHosts.put(view, host);
                 boolean isStartPage = HOME_PAGE.equals(view.getTag()) && "https://aster.start/".equals(url);
                 if (view == current()) address.setText(isStartPage ? "" : url);
                 if (!isStartPage && isWebUrl(url)) {
@@ -302,6 +335,148 @@ public class MainActivity extends Activity {
             }
         });
         return w;
+    }
+
+    private boolean shouldBlockRequest(WebView view, Uri uri, boolean isMainFrame) {
+        if (isMainFrame || !prefs.getBoolean("shield_enabled", true) || uri == null) return false;
+        String host = normalizedHost(uri.getHost());
+        if (host == null) return false;
+
+        String firstPartyHost = topLevelHosts.get(view);
+        if (isSiteException(firstPartyHost)) return false;
+        if (!isShieldBlockedHost(host)) return false;
+
+        totalBlockedRequests.incrementAndGet();
+        incrementCounter(pageBlockedCounts, view);
+        incrementCounter(blockedDomainCounts, host);
+        return true;
+    }
+
+    private <K> void incrementCounter(Map<K, AtomicInteger> counters, K key) {
+        AtomicInteger counter = counters.get(key);
+        if (counter == null) {
+            AtomicInteger created = new AtomicInteger(0);
+            AtomicInteger existing = counters.putIfAbsent(key, created);
+            counter = existing == null ? created : existing;
+        }
+        counter.incrementAndGet();
+    }
+
+    private WebResourceResponse blockedWebResponse() {
+        return new WebResourceResponse(
+            "text/plain", "UTF-8", new ByteArrayInputStream(new byte[0])
+        );
+    }
+
+    private String normalizedHost(String host) {
+        if (host == null) return null;
+        String value = host.trim().toLowerCase(Locale.ROOT);
+        while (value.endsWith(".")) value = value.substring(0, value.length() - 1);
+        return value.isEmpty() ? null : value;
+    }
+
+    private boolean isShieldBlockedHost(String host) {
+        for (String domain : SHIELD_BLOCKED_HOSTS) {
+            if (host.equals(domain) || host.endsWith("." + domain)) return true;
+        }
+        return false;
+    }
+
+    private boolean isSiteException(String host) {
+        if (host == null) return false;
+        String exceptions = prefs.getString("shield_site_exceptions", "");
+        for (String item : exceptions.split("\\n")) {
+            String allowed = normalizedHost(item);
+            if (host.equals(allowed)) return true;
+        }
+        return false;
+    }
+
+    private String currentSiteHost() {
+        if (tabs.isEmpty()) return null;
+        String url = current().getUrl();
+        String host = normalizedHost(url == null ? null : Uri.parse(url).getHost());
+        return host != null ? host : topLevelHosts.get(current());
+    }
+
+    private void toggleCurrentSiteException() {
+        String host = currentSiteHost();
+        if (host == null) {
+            Toast.makeText(this, "Open a website first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Set<String> exceptions = new LinkedHashSet<>();
+        String old = prefs.getString("shield_site_exceptions", "");
+        for (String line : old.split("\\n")) {
+            String value = normalizedHost(line);
+            if (value != null) exceptions.add(value);
+        }
+        boolean wasAllowed = exceptions.remove(host);
+        if (!wasAllowed) exceptions.add(host);
+        StringBuilder updated = new StringBuilder();
+        for (String value : exceptions) updated.append(value).append('\n');
+        prefs.edit().putString("shield_site_exceptions", updated.toString()).apply();
+        Toast.makeText(this,
+            wasAllowed ? "Protection restored for " + host : "Protection paused for " + host,
+            Toast.LENGTH_LONG).show();
+        current().reload();
+    }
+
+    private void showPrivacyPanel() {
+        if (tabs.isEmpty()) return;
+        boolean enabled = prefs.getBoolean("shield_enabled", true);
+        String host = currentSiteHost();
+        boolean excepted = isSiteException(host);
+        AtomicInteger pageCount = pageBlockedCounts.get(current());
+        int pageTotal = pageCount == null ? 0 : pageCount.get();
+
+        String message = "ASTER Shield\n"
+            + "Ad and tracker blocking: " + (enabled ? "ON" : "OFF") + "\n"
+            + "Current site: " + (host == null ? "New tab" : host) + "\n"
+            + "Site protection: " + (excepted ? "PAUSED" : "ACTIVE") + "\n\n"
+            + "Blocked on this page: " + pageTotal + "\n"
+            + "Blocked this session: " + totalBlockedRequests.get()
+            + "\n\nThe built-in list blocks known ad and analytics domains. Some ads may still appear.";
+
+        String globalAction = enabled ? "Turn off protection everywhere" : "Turn on protection everywhere";
+        String siteAction = excepted ? "Restore protection on this site" : "Pause protection on this site";
+        String[] actions = {globalAction, siteAction, "View blocked domains"};
+        new AlertDialog.Builder(this).setTitle("ASTER Shield")
+            .setMessage(message)
+            .setItems(actions, (dialog, which) -> {
+                if (which == 0) {
+                    boolean next = !prefs.getBoolean("shield_enabled", true);
+                    prefs.edit().putBoolean("shield_enabled", next).apply();
+                    Toast.makeText(this, next ? "ASTER Shield enabled" : "ASTER Shield disabled", Toast.LENGTH_SHORT).show();
+                    current().reload();
+                } else if (which == 1) {
+                    toggleCurrentSiteException();
+                } else {
+                    showBlockedDomains();
+                }
+            }).setNegativeButton("Close", null).show();
+    }
+
+    private void showBlockedDomains() {
+        if (blockedDomainCounts.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("Blocked domains")
+                .setMessage("No domains have been blocked in this session yet.")
+                .setPositiveButton("OK", null).show();
+            return;
+        }
+        List<String> domains = new ArrayList<>(blockedDomainCounts.keySet());
+        Collections.sort(domains);
+        StringBuilder message = new StringBuilder();
+        int shown = 0;
+        for (String domain : domains) {
+            if (shown++ >= 30) break;
+            AtomicInteger count = blockedDomainCounts.get(domain);
+            message.append(domain).append("  ·  ")
+                .append(count == null ? 0 : count.get()).append('\n');
+        }
+        if (domains.size() > 30) message.append("\nAnd ").append(domains.size() - 30).append(" more...");
+        new AlertDialog.Builder(this).setTitle("Blocked domains (" + totalBlockedRequests.get() + ")")
+            .setMessage(message.toString()).setPositiveButton("OK", null).show();
     }
 
     private void loadStartPage(WebView target) {
@@ -514,6 +689,8 @@ public class MainActivity extends Activity {
             return;
         }
         WebView w = tabs.remove(active);
+        topLevelHosts.remove(w);
+        pageBlockedCounts.remove(w);
         webContainer.removeView(w);
         w.stopLoading();
         w.destroy();
@@ -632,6 +809,8 @@ public class MainActivity extends Activity {
             settings.put("homepage", getHomepage());
             settings.put("search_engine", prefs.getString("search_engine", "google"));
             settings.put("restore_tabs", prefs.getBoolean("restore_tabs", true));
+            settings.put("shield_enabled", prefs.getBoolean("shield_enabled", true));
+            settings.put("shield_site_exceptions", prefs.getString("shield_site_exceptions", ""));
             backup.put("settings", settings);
 
             try (OutputStream output = getContentResolver().openOutputStream(destination, "w")) {
@@ -696,6 +875,8 @@ public class MainActivity extends Activity {
                 .putString("homepage", homepage)
                 .putString("search_engine", engine)
                 .putBoolean("restore_tabs", settings.optBoolean("restore_tabs", true))
+                .putBoolean("shield_enabled", settings.optBoolean("shield_enabled", true))
+                .putString("shield_site_exceptions", sanitizeHostLines(settings.optString("shield_site_exceptions", "")))
                 .putString("session_tabs", safeTabs.toString())
                 .putInt("active_tab", restoredActive)
                 .apply();
@@ -718,6 +899,20 @@ public class MainActivity extends Activity {
             output.write(buffer, 0, count);
         }
         return output.toByteArray();
+    }
+
+    private String sanitizeHostLines(String raw) {
+        Set<String> safe = new LinkedHashSet<>();
+        if (raw != null) {
+            for (String line : raw.split("\\n")) {
+                String host = normalizedHost(line);
+                if (host != null && host.matches("[a-z0-9.-]+") && host.contains(".")) safe.add(host);
+                if (safe.size() >= 500) break;
+            }
+        }
+        StringBuilder result = new StringBuilder();
+        for (String host : safe) result.append(host).append('\n');
+        return result.toString();
     }
 
     private String sanitizeUrlLines(String raw) {
@@ -748,6 +943,8 @@ public class MainActivity extends Activity {
     private void rebuildTabs(List<String> urls, int selectedIndex) {
         for (WebView tab : tabs) {
             tab.stopLoading();
+            topLevelHosts.remove(tab);
+            pageBlockedCounts.remove(tab);
             webContainer.removeView(tab);
             tab.destroy();
         }
@@ -981,6 +1178,8 @@ public class MainActivity extends Activity {
         saveSession();
         for (WebView w : tabs) {
             w.stopLoading();
+            topLevelHosts.remove(w);
+            pageBlockedCounts.remove(w);
             w.destroy();
         }
         super.onDestroy();
