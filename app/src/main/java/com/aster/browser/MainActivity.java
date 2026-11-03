@@ -37,6 +37,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 import java.net.URLEncoder;
 import java.util.ArrayList;
@@ -48,6 +53,9 @@ public class MainActivity extends Activity {
     private static final int MAX_TABS = 8;
     private static final String HOME_PAGE = "aster://start";
     private static final int DOWNLOAD_PERMISSION_REQUEST = 701;
+    private static final int BACKUP_EXPORT_REQUEST = 8101;
+    private static final int BACKUP_IMPORT_REQUEST = 8102;
+    private static final int MAX_BACKUP_BYTES = 2 * 1024 * 1024;
 
     private final int BG = Color.rgb(15, 17, 23);
     private final int PANEL = Color.rgb(27, 31, 42);
@@ -516,7 +524,7 @@ public class MainActivity extends Activity {
     private void showMenu() {
         String[] items = {
             "Add bookmark", "Bookmarks", "History", "Find in page",
-            "Share page", "Downloads", "Clear browsing data", "Settings", "New tab"
+            "Share page", "Downloads", "Clear browsing data", "Settings", "Backup & restore", "New tab"
         };
         new AlertDialog.Builder(this).setTitle("ASTER menu").setItems(items, (d, which) -> {
             switch (which) {
@@ -534,7 +542,8 @@ public class MainActivity extends Activity {
                     break;
                 case 6: confirmClearBrowsingData(); break;
                 case 7: showSettings(); break;
-                case 8: addTab(HOME_PAGE); break;
+                case 8: showBackupRestore(); break;
+                case 9: addTab(HOME_PAGE); break;
             }
         }).show();
     }
@@ -555,6 +564,197 @@ public class MainActivity extends Activity {
         for (String item : entries) result.append(item).append('\n');
         prefs.edit().putString("bookmarks", result.toString()).apply();
         Toast.makeText(this, "Bookmark saved", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showBackupRestore() {
+        String[] actions = {"Export backup", "Import backup"};
+        new AlertDialog.Builder(this).setTitle("Backup & restore")
+            .setItems(actions, (dialog, which) -> {
+                if (which == 0) {
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("application/json");
+                    intent.putExtra(Intent.EXTRA_TITLE, "ASTER-backup.json");
+                    try {
+                        startActivityForResult(intent, BACKUP_EXPORT_REQUEST);
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Could not open the file picker", Toast.LENGTH_LONG).show();
+                    }
+                } else {
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("application/json");
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    try {
+                        startActivityForResult(intent, BACKUP_IMPORT_REQUEST);
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Could not open the file picker", Toast.LENGTH_LONG).show();
+                    }
+                }
+            }).show();
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        Uri selectedFile = data.getData();
+        if (requestCode == BACKUP_EXPORT_REQUEST) exportBackup(selectedFile);
+        else if (requestCode == BACKUP_IMPORT_REQUEST) importBackup(selectedFile);
+    }
+
+    private void exportBackup(Uri destination) {
+        try {
+            JSONObject backup = new JSONObject();
+            backup.put("format", "ASTER_BROWSER_BACKUP");
+            backup.put("version", 1);
+            backup.put("exported_at", System.currentTimeMillis());
+            backup.put("bookmarks", prefs.getString("bookmarks", ""));
+            backup.put("history", prefs.getString("history", ""));
+
+            JSONArray savedTabs = new JSONArray();
+            for (WebView tab : tabs) {
+                String url = HOME_PAGE.equals(tab.getTag()) ? HOME_PAGE : tab.getUrl();
+                if (url == null || (!HOME_PAGE.equals(url) && !isBackupWebUrl(url))) {
+                    url = HOME_PAGE.equals(tab.getTag()) ? HOME_PAGE : getHomepage();
+                }
+                savedTabs.put(url);
+            }
+            backup.put("session_tabs", savedTabs);
+            backup.put("active_tab", Math.max(0, Math.min(active, Math.max(0, tabs.size() - 1))));
+
+            JSONObject settings = new JSONObject();
+            settings.put("homepage", getHomepage());
+            settings.put("search_engine", prefs.getString("search_engine", "google"));
+            settings.put("restore_tabs", prefs.getBoolean("restore_tabs", true));
+            backup.put("settings", settings);
+
+            try (OutputStream output = getContentResolver().openOutputStream(destination, "w")) {
+                if (output == null) throw new IllegalStateException("Could not open the selected file");
+                output.write(backup.toString(2).getBytes("UTF-8"));
+                output.flush();
+            }
+            Toast.makeText(this, "ASTER backup exported", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Backup export failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void importBackup(Uri source) {
+        try {
+            byte[] bytes;
+            try (InputStream input = getContentResolver().openInputStream(source)) {
+                if (input == null) throw new IllegalStateException("Could not read the selected file");
+                bytes = readLimited(input, MAX_BACKUP_BYTES);
+            }
+
+            String json = new String(bytes, "UTF-8");
+            if (json.startsWith("\uFEFF")) json = json.substring(1);
+            JSONObject backup = new JSONObject(json);
+            if (!"ASTER_BROWSER_BACKUP".equals(backup.optString("format"))
+                || backup.optInt("version", -1) != 1) {
+                throw new IllegalArgumentException("This is not a supported ASTER backup");
+            }
+
+            JSONObject settings = backup.optJSONObject("settings");
+            JSONArray sourceTabs = backup.optJSONArray("session_tabs");
+            if (settings == null || sourceTabs == null) {
+                throw new IllegalArgumentException("The backup is missing required data");
+            }
+
+            String bookmarks = sanitizeUrlLines(backup.optString("bookmarks", ""));
+            String history = sanitizeUrlLines(backup.optString("history", ""));
+            String homepage = settings.optString("homepage", "https://www.google.com").trim();
+            if (!isBackupWebUrl(homepage)) homepage = "https://www.google.com";
+
+            String engine = settings.optString("search_engine", "google");
+            if (!"google".equals(engine) && !"duckduckgo".equals(engine) && !"bing".equals(engine)) {
+                engine = "google";
+            }
+
+            List<String> restoredTabs = new ArrayList<>();
+            for (int i = 0; i < sourceTabs.length() && restoredTabs.size() < MAX_TABS; i++) {
+                String url = sourceTabs.optString(i, "").trim();
+                if (HOME_PAGE.equals(url) || isBackupWebUrl(url)) restoredTabs.add(url);
+            }
+            if (restoredTabs.isEmpty()) restoredTabs.add(HOME_PAGE);
+
+            int restoredActive = Math.max(0, Math.min(
+                backup.optInt("active_tab", 0), restoredTabs.size() - 1
+            ));
+            JSONArray safeTabs = new JSONArray();
+            for (String url : restoredTabs) safeTabs.put(url);
+
+            prefs.edit()
+                .putString("bookmarks", bookmarks)
+                .putString("history", history)
+                .putString("homepage", homepage)
+                .putString("search_engine", engine)
+                .putBoolean("restore_tabs", settings.optBoolean("restore_tabs", true))
+                .putString("session_tabs", safeTabs.toString())
+                .putInt("active_tab", restoredActive)
+                .apply();
+
+            rebuildTabs(restoredTabs, restoredActive);
+            Toast.makeText(this, "Backup restored successfully", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not restore backup: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private byte[] readLimited(InputStream input, int limit) throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int total = 0;
+        int count;
+        while ((count = input.read(buffer)) != -1) {
+            total += count;
+            if (total > limit) throw new IllegalArgumentException("Backup file is too large");
+            output.write(buffer, 0, count);
+        }
+        return output.toByteArray();
+    }
+
+    private String sanitizeUrlLines(String raw) {
+        Set<String> safe = new LinkedHashSet<>();
+        if (raw == null) return "";
+        for (String line : raw.split("\\n")) {
+            String url = line.trim();
+            if (isBackupWebUrl(url)) safe.add(url);
+            if (safe.size() >= 5000) break;
+        }
+        StringBuilder result = new StringBuilder();
+        for (String url : safe) result.append(url).append('\\n');
+        return result.toString();
+    }
+
+    private boolean isBackupWebUrl(String value) {
+        if (!isWebUrl(value) || value.length() > 2048) return false;
+        try {
+            Uri uri = Uri.parse(value);
+            String scheme = uri.getScheme();
+            return uri.getHost() != null
+                && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private void rebuildTabs(List<String> urls, int selectedIndex) {
+        for (WebView tab : tabs) {
+            tab.stopLoading();
+            webContainer.removeView(tab);
+            tab.destroy();
+        }
+        tabs.clear();
+        webContainer.removeAllViews();
+        active = 0;
+
+        for (int i = 0; i < urls.size() && i < MAX_TABS; i++) {
+            String url = urls.get(i);
+            addTab(HOME_PAGE.equals(url) ? HOME_PAGE : url);
+        }
+        if (tabs.isEmpty()) addTab(HOME_PAGE);
+        selectTab(Math.max(0, Math.min(selectedIndex, tabs.size() - 1)));
     }
 
     private void showSettings() {
