@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.0] - 2026-11-03
+### Added
+- Replaced ASTER Shield's small static-only block check with a cached domain-rule engine that imports supported network rules and exceptions from EasyList and EasyPrivacy.
+- Added automatic weekly filter refresh, manual filter updates, and a live domain-rule count in the protection panel.
+- Refreshed the start page and browser chrome with a dark violet ASTER visual theme, updated search field, shortcut tiles, and matching controls.
+
+### Limitations
+- The WebView integration currently imports domain-based network rules only. Cosmetic selectors, scriptlets, advanced ABP options, and first-party ad replacement are not supported; some ads may remain.
+- ASTER continues to use Android System WebView rather than a Chromium-based independent engine.
+
+
 ## [0.11.0] - 2026-11-03
 ### Added
 - Added ASTER Update: checks GitHub Releases on startup, every 24 hours while the app is active, and on demand from Settings.
