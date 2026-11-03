@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
 
 permissions:
   contents: write
@@ -32,6 +33,21 @@ jobs:
         run: |
           VERSION=$(grep -oP "versionName '\\K[^']+" app/build.gradle)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "release_tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Decide whether this is a major release
+        id: release
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]] || [[ "$COMMIT_MESSAGE" == *"[release]"* ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Prepare persistent release signing
         id: signing
         env:
@@ -72,11 +88,22 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
       - name: Publish signed GitHub Release
-        if: steps.signing.outputs.ready == 'true'
+        if: steps.release.outputs.publish == 'true' && steps.signing.outputs.ready == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: ASTER Browser v${{ steps.version.outputs.version }}
+          tag_name: ${{ steps.version.outputs.release_tag }}
+          name: ASTER Browser ${{ steps.version.outputs.release_tag }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: app/build/outputs/apk/release/app-release.apk
+      - name: Publish source-only GitHub Release
+        if: steps.release.outputs.publish == 'true' && steps.signing.outputs.ready != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.release_tag }}
+          name: ASTER Browser ${{ steps.version.outputs.release_tag }}
+          generate_release_notes: true
+          body: |
+            This major version is published with its source code and release notes.
+
+            The Android APK is not attached because permanent release signing has not been configured yet. Debug APKs are distributed separately as test artifacts and are not compatible as install-over updates.
