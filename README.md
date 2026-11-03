@@ -31,4 +31,5 @@ ASTER checks GitHub Releases and can download an APK update for Android's packag
 The Android project uses Gradle and Android Gradle Plugin. GitHub Actions builds the APK. See `.github/workflows/build-android.yml`.
 
 
-Release 0.12.0 includes the ASTER Shield filter engine and refreshed browser interface.
+
+Release 0.12.0 includes the ASTER Shield filter engine, refreshed browser chrome, a new start page, and a grid-based browser menu.
