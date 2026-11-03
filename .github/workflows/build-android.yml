@@ -96,7 +96,7 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: app/build/outputs/apk/release/app-release.apk
-      - name: Publish source-only GitHub Release
+      - name: Publish source release with directly downloadable debug APK
         if: steps.release.outputs.publish == 'true' && steps.signing.outputs.ready != 'true'
         uses: softprops/action-gh-release@v2
         with:
@@ -104,6 +104,8 @@ jobs:
           name: ASTER Browser ${{ steps.version.outputs.release_tag }}
           generate_release_notes: true
           body: |
-            This major version is published with its source code and release notes.
+            This major version is published with its source code, release notes, and a directly downloadable Android debug APK.
 
-            The Android APK is not attached because permanent release signing has not been configured yet. Debug APKs are distributed separately as test artifacts and are not compatible as install-over updates.
+            IMPORTANT: This APK is signed with a temporary debug key. It is for testing and may not install over an existing ASTER Browser build. Do not uninstall an existing installation unless you have backed up any data you need.
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
