@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Current Android version: **0.15.0**.
+Current Android version: **0.15.1**.
 
 ASTER is an Android-first browser prototype with a dark violet interface, tabbed browsing, bookmarks, history, downloads, and privacy controls. Its visual direction is original and takes broad inspiration from modern browsers such as Brave and Opera GX.
 
