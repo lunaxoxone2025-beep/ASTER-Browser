@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Current Android version: **0.12.0**.
+Current Android version: **0.13.0**.
 
 ASTER is an Android-first browser prototype with a dark violet interface, tabbed browsing, bookmarks, history, downloads, and privacy controls. Its visual direction is original and takes broad inspiration from modern browsers such as Brave and Opera GX.
 
@@ -18,6 +18,12 @@ ASTER currently uses Android System WebView. It is not a standalone Chromium bro
 
 **Important limitation:** the current WebView integration extracts domain-based network rules. It does not implement cosmetic CSS selectors, scriptlets, every ABP option, or advanced first-party ad removal. Therefore it can block many ad/tracker requests, but it cannot guarantee an ad-free page or match Brave's native Shields engine.
 
+## Start page and tabs
+
+- Customize the start page by showing or hiding ASTER branding, quick-access shortcuts, and bookmarks.
+- Choose one of four backgrounds: Violet, Midnight, Ocean, or Crimson.
+- View open tabs in a two-column card layout with page titles, domains, active-tab highlighting, close controls, and a quick new-tab action.
+
 ## Backup and restore
 
 Use **Backup & restore** from the browser menu to export or import bookmarks, history, settings, and open tabs as JSON. Backups do not include cookies, passwords, cache, or WebView form data.
@@ -32,4 +38,4 @@ The Android project uses Gradle and Android Gradle Plugin. GitHub Actions builds
 
 
 
-Release 0.12.0 includes the ASTER Shield filter engine, refreshed browser chrome, a new start page, and a grid-based browser menu.
+Release 0.13.0 adds start-page customization, four visual themes, and a card-based tab switcher, while retaining ASTER Shield network filtering.
