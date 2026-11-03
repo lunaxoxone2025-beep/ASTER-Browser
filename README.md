@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Current Android version: **0.14.0**.
+Current Android version: **0.15.0**.
 
 ASTER is an Android-first browser prototype with a dark violet interface, tabbed browsing, bookmarks, history, downloads, and privacy controls. Its visual direction is original and takes broad inspiration from modern browsers such as Brave and Opera GX.
 
@@ -10,9 +10,9 @@ ASTER currently uses Android System WebView. It is not a standalone Chromium bro
 
 ## ASTER Shield — ad and tracker blocking
 
-- Uses a local cache of supported domain network rules imported from EasyList and EasyPrivacy.
+- Uses a local cache of supported domain network rules imported from EasyList, EasyPrivacy, AdGuard Base, AdGuard Tracking Protection, AdGuard Mobile Ads, and Peter Lowe's ad-server list.
 - Includes built-in advertising and analytics domains.
-- Refreshes filter lists weekly when a network connection is available; users can also request an update from the Shield panel.
+- Refreshes filter lists every 24 hours when a network connection is available; users can also request an update from the Shield panel.
 - Supports global protection and per-site exceptions.
 - Tracks blocked requests per page and per session.
 
