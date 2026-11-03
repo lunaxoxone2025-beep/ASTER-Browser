@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.15.0] - 2026-11-03
+### Improved
+- Expanded ASTER Shield with EasyList, EasyPrivacy, AdGuard Base, AdGuard Tracking Protection, AdGuard Mobile Ads, and Peter Lowe ad-server domain filters.
+- Increased the supported domain-rule cache to 200,000 entries and refreshes filter lists every 24 hours.
+- Added cosmetic ad hiding for common ad containers and YouTube ad overlays, plus automatic activation of YouTube's visible Skip Ad button when available.
+
+### Limitations
+- Android WebView cannot reliably block YouTube server-side/in-stream ads that share delivery domains with normal video; this release reduces supported ad requests and hides some ad UI but cannot guarantee an ad-free YouTube experience.
+- Advanced cosmetic filters, scriptlets, and full uBlock Origin/Brave filter semantics are not supported.
+
+
 ## [0.14.0] - 2026-11-03
 ### Added
 - Added a responsive Android layout that adjusts browser chrome spacing and navigation width for compact phones and expanded tablet, foldable, and desktop-sized app windows.
