@@ -114,7 +114,7 @@ public final class AdBlockEngine {
                     connection = (HttpURLConnection) new URL(source).openConnection();
                     connection.setConnectTimeout(12000);
                     connection.setReadTimeout(20000);
-                    connection.setRequestProperty("User-Agent", "ASTER-Browser/0.12.0");
+                    connection.setRequestProperty("User-Agent", "ASTER-Browser/0.14.0");
                     connection.setRequestProperty("Accept", "text/plain");
                     if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) continue;
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), "UTF-8"))) {
