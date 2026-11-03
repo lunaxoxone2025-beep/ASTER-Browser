@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.14.0] - 2026-11-03
+### Added
+- Added a responsive Android layout that adjusts browser chrome spacing and navigation width for compact phones and expanded tablet, foldable, and desktop-sized app windows.
+- Added desktop-site mode with a desktop-style WebView user agent and wide viewport rendering.
+- Added Reader Mode with a simplified article view and a one-tap exit control.
+- Added page translation through Google Translate, with selectable target languages: Spanish, English, Slovenian, Japanese, Korean, French, and German.
+- Added adjustable webpage text zoom: 85%, 100%, 115%, 130%, and 150%.
+- Added support for file uploads on websites through Android's system document picker.
+- Added external HTTP/HTTPS link handling so ASTER can be selected as an Android browser.
+- Added hardware keyboard shortcuts for address focus, new/close tab, reload, and cycling tabs.
+- Extended JSON backup and restore to include the new display and browsing preferences.
+
+### Notes
+- Responsive behavior supports Android devices and resizable Android windows; it does not make this Android app available on iOS, Windows, or macOS.
+- Desktop mode requests desktop versions of websites but remains rendered by Android System WebView.
+- Translation opens the selected page through Google Translate and requires internet access.
+- Reader Mode extracts visible page text; complex pages may not be parsed perfectly.
+
+
 ## [0.13.0] - 2026-11-03
 ### Added
 - Added start-page customization: independently show or hide ASTER branding, quick-access shortcuts, and saved bookmarks.
