@@ -756,7 +756,12 @@ public class MainActivity extends Activity {
         html.append("<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>");
         html.append("<meta name='color-scheme' content='dark'><title>New tab - ASTER</title><style>");
         html.append("*{box-sizing:border-box}html,body{min-height:100%;margin:0}");
-        html.append("body{background:radial-gradient(ellipse at 50% 8%,#35204d 0%,#171321 42%,#0c0b11 100%);color:#f5f2fa;font-family:Arial, sans-serif}");
+        String homeTheme = prefs.getString("home_theme", "violet");
+        String background = "#35204d 0%,#171321 42%,#0c0b11 100%";
+        if ("midnight".equals(homeTheme)) background = "#29354b 0%,#141b29 45%,#090d15 100%";
+        else if ("ocean".equals(homeTheme)) background = "#12475a 0%,#102530 45%,#080e14 100%";
+        else if ("crimson".equals(homeTheme)) background = "#512538 0%,#21131e 45%,#0d0b11 100%";
+        html.append("body{background:radial-gradient(ellipse at 50% 8%,").append(background).append(");color:#f5f2fa;font-family:Arial, sans-serif}");
         html.append(".page{min-height:100vh;max-width:720px;margin:auto;padding:clamp(42px,12vh,110px) 22px 34px;display:flex;flex-direction:column;align-items:center}");
         html.append(".logo{width:62px;height:62px;border-radius:21px;display:grid;place-items:center;background:linear-gradient(145deg,#f08cff,#8d4dff 62%,#5431b8);color:#fff;font-size:30px;font-weight:900;box-shadow:0 12px 42px #9b4dff55}");
         html.append(".name{margin-top:16px;font-size:23px;font-weight:900;letter-spacing:4px}.tag{margin-top:7px;color:#b5a9c8;font-size:12px;letter-spacing:.7px}");
@@ -771,25 +776,25 @@ public class MainActivity extends Activity {
         html.append(".footer{margin-top:auto;padding-top:45px;color:#657083;font-size:10px;letter-spacing:1px}");
         html.append("@media(max-width:380px){.page{padding-left:15px;padding-right:15px}.sites{gap:8px}.site{min-height:88px}.label{font-size:11px}}");
         html.append("</style></head><body><main class='page'>");
-        html.append("<div class='logo'>✦</div><div class='name'>ASTER</div><div class='tag'>A fresh start to the web</div>");
+        if (prefs.getBoolean("home_show_branding", true)) html.append("<div class='logo'>✦</div><div class='name'>ASTER</div><div class='tag'>A fresh start to the web</div>");
         html.append("<form method='get' action='").append(searchAction).append("'>");
         html.append("<input name='q' type='search' placeholder='Search the web' autocomplete='off' aria-label='Search the web'>");
         html.append("<button type='submit'>Search</button></form>");
-        html.append("<section class='section'><div class='heading'>Quick access</div><div class='sites'>");
+        if (prefs.getBoolean("home_show_shortcuts", true)) html.append("<section class='section'><div class='heading'>Quick access</div><div class='sites'>");
         appendStartCard(html, "Google", "G", "https://www.google.com");
         appendStartCard(html, "YouTube", "▶", "https://www.youtube.com");
         appendStartCard(html, "GitHub", "⌘", "https://github.com");
         appendStartCard(html, "Wikipedia", "W", "https://www.wikipedia.org");
         appendStartCard(html, "Reddit", "r", "https://www.reddit.com");
         appendStartCard(html, "DuckDuckGo", "D", "https://duckduckgo.com");
-        html.append("</div></section>");
+        if (prefs.getBoolean("home_show_shortcuts", true)) html.append("</div></section>");
 
         List<String> saved = new ArrayList<>();
         for (String line : prefs.getString("bookmarks", "").split("\\n")) {
             if (!line.trim().isEmpty() && isWebUrl(line.trim())) saved.add(line.trim());
             if (saved.size() == 4) break;
         }
-        html.append("<section class='section'><div class='heading'>Bookmarks</div><div class='saved'>");
+        if (prefs.getBoolean("home_show_bookmarks", true)) html.append("<section class='section'><div class='heading'>Bookmarks</div><div class='saved'>");
         if (saved.isEmpty()) {
             html.append("<div class='empty'>Pages you bookmark will appear here.</div>");
         } else {
@@ -800,7 +805,8 @@ public class MainActivity extends Activity {
                     .append(escapeHtml(label)).append("</a>");
             }
         }
-        html.append("</div></section><div class='footer'>ASTER BROWSER</div></main></body></html>");
+        if (prefs.getBoolean("home_show_bookmarks", true)) html.append("</div></section>");
+        html.append("<div class='footer'>ASTER BROWSER</div></main></body></html>");
         target.setTag(HOME_PAGE);
         target.loadDataWithBaseURL("https://aster.start/", html.toString(), "text/html", "UTF-8", null);
     }
@@ -934,52 +940,82 @@ public class MainActivity extends Activity {
     }
 
     private void showTabs() {
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setPadding(dp(12), dp(8), dp(12), dp(8));
-        scroll.addView(list);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(12), dp(8), dp(12), dp(10));
+        content.setBackgroundColor(BG);
 
-        TextView summary = panelText(tabs.size() + " of " + MAX_TABS + " tabs open", 13, MUTED);
-        summary.setPadding(dp(4), dp(5), dp(4), dp(12));
-        list.addView(summary);
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView summary = panelText(tabs.size() + " / " + MAX_TABS + " OPEN TABS", 12, MUTED);
+        summary.setTypeface(Typeface.DEFAULT_BOLD);
+        header.addView(summary, new LinearLayout.LayoutParams(0, dp(42), 1));
+        TextView newTab = chromeButton("+ New", 13, "Open new tab");
+        newTab.setTextColor(ACCENT);
+        header.addView(newTab, new LinearLayout.LayoutParams(dp(82), dp(42)));
+        content.addView(header);
+        newTab.setOnClickListener(v -> {
+            dialogSafeDismissTabs();
+            addTab(HOME_PAGE);
+        });
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(grid);
+        LinearLayout row = null;
 
         for (int i = 0; i < tabs.size(); i++) {
+            if (i % 2 == 0) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+                rowParams.bottomMargin = dp(10);
+                grid.addView(row, rowParams);
+            }
             final int index = i;
             WebView tab = tabs.get(i);
             String title = tab.getTitle();
             if (title == null || title.trim().isEmpty()) title = "New tab";
             String url = tab.getUrl();
-            if (url == null || HOME_PAGE.equals(tab.getTag())) url = "ASTER start page";
+            String host = "aster://start";
+            if (url != null && !url.isEmpty() && !HOME_PAGE.equals(tab.getTag())) {
+                String parsed = Uri.parse(url).getHost();
+                if (parsed != null) host = parsed;
+            }
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(12), dp(11), dp(12), dp(10));
+            card.setBackground(rounded(i == active ? Color.rgb(57, 38, 76) : PANEL, 17));
+            LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(0, dp(142), 1);
+            cardParams.setMargins(dp(4), dp(2), dp(4), dp(2));
+            row.addView(card, cardParams);
 
-            LinearLayout row = new LinearLayout(this);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(dp(12), dp(10), dp(8), dp(10));
-            row.setBackground(rounded(i == active ? Color.rgb(48, 43, 39) : PANEL, 16));
-            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
-            rowParams.bottomMargin = dp(8);
-            list.addView(row, rowParams);
-
-            LinearLayout details = new LinearLayout(this);
-            details.setOrientation(LinearLayout.VERTICAL);
-            details.setPadding(0, dp(2), dp(8), dp(2));
-            row.addView(details, new LinearLayout.LayoutParams(0, -2, 1));
-
-            TextView titleView = panelText((i == active ? "●  " : "") + title, 14, TEXT);
-            titleView.setTypeface(i == active ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-            details.addView(titleView);
-            TextView urlView = panelText(url, 11, MUTED);
+            LinearLayout top = new LinearLayout(this);
+            top.setGravity(Gravity.CENTER_VERTICAL);
+            TextView mark = panelText(host.equals("aster://start") ? "✦" : host.substring(0, 1).toUpperCase(Locale.ROOT), 17, ACCENT);
+            mark.setGravity(Gravity.CENTER);
+            mark.setBackground(rounded(Color.rgb(54, 39, 69), 12));
+            card.addView(mark, new LinearLayout.LayoutParams(dp(34), dp(34)));
+            TextView close = chromeButton("×", 18, "Close tab");
+            close.setTextColor(MUTED);
+            LinearLayout.LayoutParams closeParams = new LinearLayout.LayoutParams(dp(34), dp(34));
+            closeParams.gravity = Gravity.RIGHT;
+            top.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+            top.addView(close, closeParams);
+            card.addView(top);
+            TextView titleView = panelText((i == active ? "● " : "") + title, 13, TEXT);
+            titleView.setTypeface(Typeface.DEFAULT_BOLD);
+            titleView.setMaxLines(2);
+            titleView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(-1, 0, 1);
+            titleParams.topMargin = dp(8);
+            card.addView(titleView, titleParams);
+            TextView urlView = panelText(host, 10, MUTED);
             urlView.setMaxLines(1);
             urlView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            LinearLayout.LayoutParams urlParams = new LinearLayout.LayoutParams(-1, -2);
-            urlParams.topMargin = dp(3);
-            details.addView(urlView, urlParams);
-
-            TextView close = chromeButton("×", 20, "Close tab");
-            close.setTextColor(MUTED);
-            close.setBackground(rounded(Color.rgb(38, 42, 52), 14));
-            row.addView(close, new LinearLayout.LayoutParams(dp(42), dp(42)));
-            row.setOnClickListener(v -> {
+            card.addView(urlView);
+            card.setOnClickListener(v -> {
                 selectTab(index);
                 dialogSafeDismissTabs();
             });
@@ -988,18 +1024,17 @@ public class MainActivity extends Activity {
                 dialogSafeDismissTabs();
             });
         }
+        if (tabs.size() % 2 != 0 && row != null) row.addView(new View(this), new LinearLayout.LayoutParams(0, dp(142), 1));
+        content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle("Your tabs")
-            .setView(scroll)
+            .setTitle("ASTER  /  TABS")
+            .setView(content)
             .setNegativeButton("Done", null)
-            .setPositiveButton("+ New tab", (d, which) -> addTab(HOME_PAGE))
             .create();
         pendingTabsDialog = dialog;
         dialog.show();
     }
-
-    private AlertDialog pendingTabsDialog;
 
     private void dialogSafeDismissTabs() {
         if (pendingTabsDialog != null && pendingTabsDialog.isShowing()) pendingTabsDialog.dismiss();
@@ -1327,11 +1362,54 @@ public class MainActivity extends Activity {
         selectTab(Math.max(0, Math.min(selectedIndex, tabs.size() - 1)));
     }
 
+    private void showStartPageCustomization() {
+        String[] options = {"ASTER logo and welcome text", "Quick access shortcuts", "Saved bookmarks"};
+        boolean[] selected = {
+            prefs.getBoolean("home_show_branding", true),
+            prefs.getBoolean("home_show_shortcuts", true),
+            prefs.getBoolean("home_show_bookmarks", true)
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Customize start page")
+            .setMultiChoiceItems(options, selected, (dialog, which, checked) -> selected[which] = checked)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Next", (dialog, which) -> {
+                prefs.edit()
+                    .putBoolean("home_show_branding", selected[0])
+                    .putBoolean("home_show_shortcuts", selected[1])
+                    .putBoolean("home_show_bookmarks", selected[2])
+                    .apply();
+                chooseStartPageTheme();
+            }).show();
+    }
+
+    private void chooseStartPageTheme() {
+        String[] themes = {"Violet (ASTER)", "Midnight", "Ocean", "Crimson"};
+        String[] values = {"violet", "midnight", "ocean", "crimson"};
+        String currentTheme = prefs.getString("home_theme", "violet");
+        int checked = 0;
+        for (int i = 0; i < values.length; i++) if (values[i].equals(currentTheme)) checked = i;
+        new AlertDialog.Builder(this).setTitle("Start page color")
+            .setSingleChoiceItems(themes, checked, (dialog, which) -> {
+                prefs.edit().putString("home_theme", values[which]).apply();
+                dialog.dismiss();
+                refreshStartPages();
+                Toast.makeText(this, "Start page updated", Toast.LENGTH_SHORT).show();
+            }).setNegativeButton("Cancel", null).show();
+    }
+
+    private void refreshStartPages() {
+        for (WebView tab : tabs) {
+            if (HOME_PAGE.equals(tab.getTag())) loadStartPage(tab);
+        }
+    }
+
     private void showSettings() {
         String homepage = getHomepage();
         String[] items = {
             "Search engine: " + getSearchEngineName(),
             "Homepage: " + homepage,
+            "Customize start page",
             "Restore tabs on startup: " + (prefs.getBoolean("restore_tabs", true) ? "On" : "Off"),
             "Check for updates",
             "About ASTER Browser"
@@ -1339,11 +1417,12 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Browser settings").setItems(items, (d, which) -> {
             if (which == 0) chooseSearchEngine();
             else if (which == 1) editHomepage();
-            else if (which == 2) chooseRestoreTabs();
-            else if (which == 3) {
+            else if (which == 2) showStartPageCustomization();
+            else if (which == 3) chooseRestoreTabs();
+            else if (which == 4) {
                 Toast.makeText(this, "Checking for updates…", Toast.LENGTH_SHORT).show();
                 checkForUpdates(true);
-            } else if (which == 4) {
+            } else if (which == 5) {
                 new AlertDialog.Builder(this).setTitle("ASTER Browser")
                     .setMessage("Version " + BuildConfig.VERSION_NAME + "\\nAutomatic update checks are enabled. Updates always require your confirmation in Android.")
                     .setPositiveButton("Check now", (dialog, button) -> checkForUpdates(true))
