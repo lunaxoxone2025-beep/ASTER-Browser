@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Versión Android actual: **0.15.0**.
+Versión Android actual: **0.15.1**.
 
 ASTER es un navegador para Android en desarrollo, con pestañas, marcadores, historial, descargas y controles de privacidad. La nueva dirección visual utiliza tonos oscuros violetas, una página de inicio renovada y controles inspirados de forma general en navegadores modernos como Brave y Opera GX, manteniendo una identidad propia.
 
