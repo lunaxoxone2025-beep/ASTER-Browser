@@ -2,18 +2,6 @@
 
 ## [0.15.0] - 2026-11-03
 ### Improved
-- Expanded ASTER Shield domain coverage with EasyList, EasyPrivacy, AdGuard DNS filter, StevenBlack hosts, AdAway, and Peter Lowe ad-server lists.
-- Added parsing for hosts-format blocklists as well as supported EasyList domain network rules.
-- Expanded YouTube cosmetic filtering for common ad placements and automatic activation of visible skip-ad controls.
-- Updated Shield messaging to explain the improved filter sources and remaining WebView/YouTube limitations.
-
-### Limitations
-- YouTube in-stream ads can share delivery infrastructure with video content; Android WebView cannot reliably distinguish or block every such ad without breaking playback.
-- This remains a domain/host and targeted cosmetic filter, not a full uBlock Origin or Brave Shields engine.
-
-
-## [0.15.0] - 2026-11-03
-### Improved
 - Expanded ASTER Shield with EasyList, EasyPrivacy, AdGuard Base, AdGuard Tracking Protection, AdGuard Mobile Ads, and Peter Lowe ad-server domain filters.
 - Increased the supported domain-rule cache to 200,000 entries and refreshes filter lists every 24 hours.
 - Added cosmetic ad hiding for common ad containers and YouTube ad overlays, plus automatic activation of YouTube's visible Skip Ad button when available.
