@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.11.0] - 2026-11-03
+### Added
+- Added ASTER Update: checks GitHub Releases on startup, every 24 hours while the app is active, and on demand from Settings.
+- Added in-app APK download and handoff to Android's package installer, with user confirmation.
+- Standardized the release APK asset name as `ASTER-Browser.apk` so the app can find it automatically.
+
+### Notes
+- Android still requires the user to approve installation; ASTER cannot silently install updates.
+- Updating an existing installation requires the same permanent signing key. Until that key is configured, published debug APKs may be rejected as updates.
+
+
 ## [0.10.0] - 2026-11-03
 ### Added
 - Redesigned the tab manager with a clearer list of open pages, active-tab highlighting, one-tap switching, and individual close controls.
