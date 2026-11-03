@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Versión Android actual: **0.13.0**.
+Versión Android actual: **0.14.0**.
 
 ASTER es un navegador para Android en desarrollo, con pestañas, marcadores, historial, descargas y controles de privacidad. La nueva dirección visual utiliza tonos oscuros violetas, una página de inicio renovada y controles inspirados de forma general en navegadores modernos como Brave y Opera GX, manteniendo una identidad propia.
 
@@ -23,6 +23,20 @@ ASTER utiliza actualmente Android System WebView. No es un navegador Chromium in
 - Elige entre cuatro fondos: Violet, Midnight, Ocean y Crimson.
 - El selector de pestañas ahora utiliza tarjetas en dos columnas, con título, dominio, indicador de pestaña activa, botón para cerrar y acceso rápido a una pestaña nueva.
 - ASTER Shield sigue disponible directamente desde la barra superior.
+
+## Compatibilidad y funciones de navegación
+
+ASTER adapta las barras y la navegación a móviles Android y a ventanas amplias o redimensionables de tablets, plegables y otros dispositivos Android compatibles. También incorpora:
+- Modo escritorio para solicitar las versiones de escritorio de las páginas.
+- Modo lectura para simplificar artículos.
+- Traducción de páginas mediante Google Translate, con idioma de destino configurable.
+- Tamaño de texto ajustable.
+- Subida de archivos desde el selector de archivos de Android.
+- Apertura de enlaces HTTP/HTTPS de otras aplicaciones cuando ASTER está seleccionado como navegador.
+- Atajos de teclado: Ctrl+L (barra de direcciones), Ctrl+T (nueva pestaña), Ctrl+W (cerrar pestaña), Ctrl+R (recargar), Ctrl+Tab / Ctrl+Shift+Tab (cambiar pestaña) y Esc (salir del modo lectura).
+- Copias de seguridad que ahora incluyen estas nuevas preferencias.
+
+ASTER sigue siendo una aplicación Android; esto no la convierte en un navegador nativo para iOS, Windows o macOS. El modo escritorio continúa utilizando Android System WebView. La traducción necesita conexión a internet y el modo lectura puede no interpretar perfectamente algunas páginas complejas.
 
 ## Copias de seguridad
 
