@@ -101,6 +101,7 @@ public class MainActivity extends Activity {
     private final List<WebView> tabs = new ArrayList<>();
     private int active = 0;
     private SharedPreferences prefs;
+    private AdBlockEngine adBlockEngine;
     private final Map<WebView, String> topLevelHosts = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<WebView, AtomicInteger> pageBlockedCounts = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicInteger> blockedDomainCounts = new ConcurrentHashMap<>();
@@ -129,10 +130,12 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         prefs = getSharedPreferences("aster", MODE_PRIVATE);
+        adBlockEngine = new AdBlockEngine(this);
         buildUi();
         if (!restoreSession()) addTab(HOME_PAGE);
         registerUpdateReceiver();
         checkForUpdates(false);
+        if (adBlockEngine.needsUpdate()) adBlockEngine.updateAsync(null);
     }
 
     private void registerUpdateReceiver() {
@@ -512,7 +515,7 @@ public class MainActivity extends Activity {
 
         String firstPartyHost = topLevelHosts.get(view);
         if (isSiteException(firstPartyHost)) return false;
-        if (!isShieldBlockedHost(host)) return false;
+        if (adBlockEngine == null || !adBlockEngine.shouldBlock(host)) return false;
 
         totalBlockedRequests.incrementAndGet();
         incrementCounter(pageBlockedCounts, view);
@@ -625,7 +628,7 @@ public class MainActivity extends Activity {
         heading.setTypeface(Typeface.DEFAULT_BOLD);
         panel.addView(heading);
 
-        TextView subtitle = panelText("Privacy protection for the pages you visit", 13, MUTED);
+        TextView subtitle = panelText("Ad and tracker blocking powered by downloadable filter lists", 13, MUTED);
         LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(-1, -2);
         subtitleParams.topMargin = dp(4);
         panel.addView(subtitle, subtitleParams);
@@ -657,6 +660,7 @@ public class MainActivity extends Activity {
         panel.addView(stats, statsParams);
         addShieldStat(stats, String.valueOf(pageTotal), "THIS PAGE");
         addShieldStat(stats, String.valueOf(totalBlockedRequests.get()), "THIS SESSION");
+        addShieldStat(stats, String.valueOf(adBlockEngine == null ? 0 : adBlockEngine.getRuleCount()), "DOMAIN RULES");
 
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Privacy & protection")
@@ -676,12 +680,21 @@ public class MainActivity extends Activity {
                 toggleCurrentSiteException();
             });
         }
+        addPanelAction(panel, "Update ad & tracker filter lists", () -> {
+            Toast.makeText(this, "Updating EasyList and EasyPrivacy…", Toast.LENGTH_LONG).show();
+            adBlockEngine.updateAsync((success, downloaded, total) -> runOnUiThread(() -> {
+                if (success) {
+                    Toast.makeText(this, "Filters updated: " + downloaded + " network rules", Toast.LENGTH_LONG).show();
+                    if (!isFinishing()) current().reload();
+                } else Toast.makeText(this, "Could not update filters. Existing rules are kept.", Toast.LENGTH_LONG).show();
+            }));
+        });
         addPanelAction(panel, "View blocked domains", () -> {
             dialog.dismiss();
             showBlockedDomains();
         });
 
-        TextView note = panelText("ASTER Shield uses a compact built-in list of known ad and analytics domains. It does not block every ad or tracking method.", 11, MUTED);
+        TextView note = panelText("Uses EasyList and EasyPrivacy domain network rules. WebView cannot apply cosmetic filters or every advanced rule, so some in-page ad spaces may remain.", 11, MUTED);
         note.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams noteParams = new LinearLayout.LayoutParams(-1, -2);
         noteParams.topMargin = dp(13);
@@ -741,17 +754,17 @@ public class MainActivity extends Activity {
         html.append("<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>");
         html.append("<meta name='color-scheme' content='dark'><title>New tab - ASTER</title><style>");
         html.append("*{box-sizing:border-box}html,body{min-height:100%;margin:0}");
-        html.append("body{background:radial-gradient(ellipse at 50% 22%,#252b38 0%,#171b24 48%,#11141b 100%);color:#f4f5f8;font-family:Arial, sans-serif}");
+        html.append("body{background:radial-gradient(ellipse at 50% 8%,#35204d 0%,#171321 42%,#0c0b11 100%);color:#f5f2fa;font-family:Arial, sans-serif}");
         html.append(".page{min-height:100vh;max-width:720px;margin:auto;padding:clamp(42px,12vh,110px) 22px 34px;display:flex;flex-direction:column;align-items:center}");
-        html.append(".logo{width:58px;height:58px;border-radius:20px;display:grid;place-items:center;background:linear-gradient(145deg,#ffc58e,#e98543);color:#191b22;font-size:30px;font-weight:900;box-shadow:0 10px 35px #0005}");
-        html.append(".name{margin-top:16px;font-size:21px;font-weight:800;letter-spacing:4px}.tag{margin-top:7px;color:#929bad;font-size:12px;letter-spacing:.5px}");
-        html.append("form{width:100%;max-width:590px;margin-top:36px;display:flex;align-items:center;background:#252b37;border:1px solid #394253;border-radius:18px;padding:6px;box-shadow:0 12px 35px #0003}");
+        html.append(".logo{width:62px;height:62px;border-radius:21px;display:grid;place-items:center;background:linear-gradient(145deg,#f08cff,#8d4dff 62%,#5431b8);color:#fff;font-size:30px;font-weight:900;box-shadow:0 12px 42px #9b4dff55}");
+        html.append(".name{margin-top:16px;font-size:23px;font-weight:900;letter-spacing:4px}.tag{margin-top:7px;color:#b5a9c8;font-size:12px;letter-spacing:.7px}");
+        html.append("form{width:100%;max-width:590px;margin-top:36px;display:flex;align-items:center;background:#211a2c;border:1px solid #57416f;border-radius:17px;padding:6px;box-shadow:0 14px 42px #0005}");
         html.append("input{min-width:0;flex:1;height:48px;border:0;outline:0;background:transparent;color:#fff;padding:0 13px;font-size:15px}input::placeholder{color:#929bad}");
-        html.append("button{height:44px;padding:0 17px;border:0;border-radius:13px;background:#f2a568;color:#17191f;font-size:13px;font-weight:800}");
+        html.append("button{height:44px;padding:0 17px;border:0;border-radius:12px;background:linear-gradient(135deg,#d878ff,#8c5cff);color:#fff;font-size:13px;font-weight:800}");
         html.append(".section{width:100%;max-width:590px;margin-top:38px}.heading{margin:0 0 15px;color:#aab2c1;font-size:11px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase}");
         html.append(".sites{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}");
-        html.append(".site{min-height:100px;padding:15px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-decoration:none;color:#eef0f5;background:#202631;border:1px solid #303949;border-radius:17px;transition:background .15s,border-color .15s}");
-        html.append(".site:active{background:#303847;border-color:#d99056}.symbol{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;background:#343d4e;color:#ffd0a7;font-size:16px;font-weight:800}.label{font-size:12px;font-weight:600;overflow-wrap:anywhere;text-align:center}");
+        html.append(".site{min-height:100px;padding:15px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-decoration:none;color:#f3edf9;background:linear-gradient(145deg,#211b2b,#17131f);border:1px solid #392b49;border-radius:17px;transition:background .15s,border-color .15s}");
+        html.append(".site:active{background:#382448;border-color:#c77cff}.symbol{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;background:#382747;color:#e8b6ff;font-size:16px;font-weight:800}.label{font-size:12px;font-weight:600;overflow-wrap:anywhere;text-align:center}");
         html.append(".saved{display:flex;flex-direction:column;gap:8px}.saved a{padding:13px 15px;border-radius:13px;background:#202631;border:1px solid #303949;color:#e9edf5;text-decoration:none;font-size:13px;overflow-wrap:anywhere}.empty{color:#7f899b;font-size:12px;padding:4px 2px}");
         html.append(".footer{margin-top:auto;padding-top:45px;color:#657083;font-size:10px;letter-spacing:1px}");
         html.append("@media(max-width:380px){.page{padding-left:15px;padding-right:15px}.sites{gap:8px}.site{min-height:88px}.label{font-size:11px}}");
