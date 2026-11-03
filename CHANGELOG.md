@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.0] - 2026-11-03
+### Added
+- Redesigned the tab manager with a clearer list of open pages, active-tab highlighting, one-tap switching, and individual close controls.
+- Added a more visual ASTER Shield privacy panel with protection status, per-page/session counters, global controls, site exceptions, and blocked-domain details.
+- Added a deliberate major-version release workflow: commits marked [release] on main and version tags v* publish a GitHub Release.
+
+### Notes
+- When persistent signing is configured, the release includes an install-over-compatible signed APK.
+- Until permanent signing is configured, GitHub Releases contain source and release notes only; debug APKs remain separate test artifacts.
+- ASTER Shield uses a compact built-in host list and is not a full cosmetic or filter-list engine.
+
 ## [0.9.0] - 2026-11-03
 ### Added
 - Introduced ASTER Shield, a lightweight WebView request blocker for a built-in set of known advertising and analytics domains.
