@@ -608,17 +608,21 @@ public class MainActivity extends Activity {
      * same video domains as legitimate media.
      */
     private void injectCosmeticAdProtection(WebView view, String url) {
+        if (view == null || url == null || !prefs.getBoolean("shield_enabled", true)) return;
         String host = normalizedHost(Uri.parse(url).getHost());
-        if (host == null) return;
+        if (host == null || isSiteException(host)) return;
         String script = "(function(){try{"
             + "if(window.__asterAdShieldInstalled)return;window.__asterAdShieldInstalled=true;"
             + "var yt=/youtube\\.com$|youtube-nocookie\\.com$/.test(location.hostname);"
-            + "var css='ins.adsbygoogle, [id^=\\\"google_ads\\\"], iframe[src*=\\\"doubleclick.net\\\"], iframe[src*=\\\"googlesyndication.com\\\"], .ad-container, .ad-banner, .advertisement, .sponsored-ad{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;pointer-events:none!important;}';"
-            + "if(yt)css+= 'ytd-ad-slot-renderer,ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,ytd-in-feed-ad-layout-renderer,ytd-banner-promo-renderer,#player-ads,#masthead-ad,.video-ads,.ytp-ad-module,.ytp-ad-overlay-container{display:none!important;visibility:hidden!important;max-height:0!important;}';"
-            + "var st=document.createElement('style');st.textContent=css;(document.head||document.documentElement).appendChild(st);"
-            + "if(yt){var skip=function(){var b=document.querySelector('.ytp-ad-skip-button,.ytp-skip-ad-button,button.ytp-ad-skip-button-modern,.ytp-ad-skip-button-modern');if(b&&b.getClientRects().length)b.click();};"
-            + "skip();new MutationObserver(skip).observe(document.documentElement,{childList:true,subtree:true});}"
-            + "new MutationObserver(function(){var nodes=document.querySelectorAll('ins.adsbygoogle,[id^=google_ads],.ad-container,.ad-banner,.advertisement');for(var i=0;i<nodes.length;i++)nodes[i].style.setProperty('display','none','important');}).observe(document.documentElement,{childList:true,subtree:true});"
+            + "var css='ins.adsbygoogle,[id^=\\\"google_ads\\\"],iframe[src*=\\\"doubleclick.net\\\"],iframe[src*=\\\"googlesyndication.com\\\"],.ad-container,.ad-banner,.advertisement,.sponsored-ad{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;pointer-events:none!important;}';"
+            + "if(yt)css+='ytd-ad-slot-renderer,ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,ytd-in-feed-ad-layout-renderer,ytd-banner-promo-renderer,ytd-action-companion-ad-renderer,ytd-promoted-video-renderer,ytd-companion-slot-renderer,#player-ads,#masthead-ad,.video-ads,.ytp-ad-module,.ytp-ad-overlay-container,.ytp-ad-text-overlay,.ytp-ad-player-overlay,.ytp-ad-image-overlay{display:none!important;visibility:hidden!important;max-height:0!important;}';"
+            + "var st=document.createElement('style');st.id='__aster_ad_shield_css';st.textContent=css;(document.head||document.documentElement).appendChild(st);"
+            + "var clean=function(){try{"
+            + "document.querySelectorAll('ins.adsbygoogle,[id^=google_ads],.ad-container,.ad-banner,.advertisement,ytd-ad-slot-renderer,ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,ytd-in-feed-ad-layout-renderer,ytd-banner-promo-renderer,ytd-action-companion-ad-renderer,ytd-promoted-video-renderer,ytd-companion-slot-renderer').forEach(function(e){e.remove();});"
+            + "if(yt)document.querySelectorAll('.ytp-ad-skip-button,.ytp-ad-skip-button-modern,.ytp-skip-ad-button').forEach(function(b){if(b.getClientRects().length&&!b.disabled)b.click();});"
+            + "}catch(e){}};"
+            + "clean();var pending=false;new MutationObserver(function(){if(pending)return;pending=true;setTimeout(function(){pending=false;clean();},120);}).observe(document.documentElement,{childList:true,subtree:true});"
+            + "if(yt)setInterval(clean,1600);"
             + "}catch(e){}})();";
         view.evaluateJavascript(script, null);
     }
@@ -743,7 +747,7 @@ public class MainActivity extends Activity {
         heading.setTypeface(Typeface.DEFAULT_BOLD);
         panel.addView(heading);
 
-        TextView subtitle = panelText("Ad and tracker blocking powered by downloadable filter lists", 13, MUTED);
+        TextView subtitle = panelText("Enhanced network filters plus targeted ad-placement cleanup", 13, MUTED);
         LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(-1, -2);
         subtitleParams.topMargin = dp(4);
         panel.addView(subtitle, subtitleParams);
@@ -775,7 +779,7 @@ public class MainActivity extends Activity {
         panel.addView(stats, statsParams);
         addShieldStat(stats, String.valueOf(pageTotal), "THIS PAGE");
         addShieldStat(stats, String.valueOf(totalBlockedRequests.get()), "THIS SESSION");
-        addShieldStat(stats, String.valueOf(adBlockEngine == null ? 0 : adBlockEngine.getRuleCount()), "DOMAIN RULES");
+        addShieldStat(stats, String.valueOf(adBlockEngine == null ? 0 : adBlockEngine.getRuleCount()), "FILTERED DOMAINS");
 
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Privacy & protection")
@@ -796,10 +800,10 @@ public class MainActivity extends Activity {
             });
         }
         addPanelAction(panel, "Update ad & tracker filter lists", () -> {
-            Toast.makeText(this, "Updating EasyList and EasyPrivacy…", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Updating enhanced ad, tracker and DNS filter lists…", Toast.LENGTH_LONG).show();
             adBlockEngine.updateAsync((success, downloaded, total) -> runOnUiThread(() -> {
                 if (success) {
-                    Toast.makeText(this, "Filters updated: " + downloaded + " network rules", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "Enhanced filters updated: " + downloaded + " domain rules", Toast.LENGTH_LONG).show();
                     if (!isFinishing()) current().reload();
                 } else Toast.makeText(this, "Could not update filters. Existing rules are kept.", Toast.LENGTH_LONG).show();
             }));
@@ -809,7 +813,7 @@ public class MainActivity extends Activity {
             showBlockedDomains();
         });
 
-        TextView note = panelText("Uses EasyList and EasyPrivacy domain network rules. WebView cannot apply cosmetic filters or every advanced rule, so some in-page ad spaces may remain.", 11, MUTED);
+        TextView note = panelText("Uses EasyList, EasyPrivacy, AdGuard DNS and community host lists, plus best-effort YouTube ad cleanup. WebView cannot reliably remove video ads served from the same domains as the video. Some ads may remain.", 11, MUTED);
         note.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams noteParams = new LinearLayout.LayoutParams(-1, -2);
         noteParams.topMargin = dp(13);
