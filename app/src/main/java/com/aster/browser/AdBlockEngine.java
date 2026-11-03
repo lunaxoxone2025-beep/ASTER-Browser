@@ -24,6 +24,7 @@ public final class AdBlockEngine {
     private static final String PREF_RULES = "adblock_domain_rules";
     private static final String PREF_ALLOW = "adblock_allow_rules";
     private static final String PREF_UPDATED = "adblock_last_update";
+    private static final String PREF_FILTER_VERSION = "adblock_filter_version";
     private static final long UPDATE_INTERVAL = 24L * 60L * 60L * 1000L;
     private static final int MAX_RULES = 200000;
     private static final Pattern BLOCK_RULE = Pattern.compile("^\\|\\|([a-z0-9.-]+)\\^");
@@ -106,7 +107,7 @@ public final class AdBlockEngine {
 
     public int getRuleCount() { return blocked.size(); }
     public long getLastUpdate() { return prefs.getLong(PREF_UPDATED, 0L); }
-    public boolean needsUpdate() { return System.currentTimeMillis() - getLastUpdate() > UPDATE_INTERVAL; }
+    public boolean needsUpdate() { return !"0.15.1".equals(prefs.getString(PREF_FILTER_VERSION, "")) || System.currentTimeMillis() - getLastUpdate() > UPDATE_INTERVAL; }
 
     public void updateAsync(Callback callback) {
         new Thread(() -> {
@@ -128,7 +129,7 @@ public final class AdBlockEngine {
                     connection = (HttpURLConnection) new URL(source).openConnection();
                     connection.setConnectTimeout(12000);
                     connection.setReadTimeout(20000);
-                    connection.setRequestProperty("User-Agent", "ASTER-Browser/0.15.0");
+                    connection.setRequestProperty("User-Agent", "ASTER-Browser/0.15.1");
                     connection.setRequestProperty("Accept", "text/plain");
                     if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) continue;
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), "UTF-8"))) {
@@ -171,7 +172,7 @@ public final class AdBlockEngine {
                 StringBuilder a = new StringBuilder();
                 for (String host : newAllowed) a.append(host).append('\n');
                 prefs.edit().putString(PREF_RULES, b.toString()).putString(PREF_ALLOW, a.toString())
-                    .putLong(PREF_UPDATED, System.currentTimeMillis()).apply();
+                    .putLong(PREF_UPDATED, System.currentTimeMillis()).putString(PREF_FILTER_VERSION, "0.15.1").apply();
                 blocked = Collections.unmodifiableSet(newBlocked);
                 allowed = Collections.unmodifiableSet(newAllowed);
             }
