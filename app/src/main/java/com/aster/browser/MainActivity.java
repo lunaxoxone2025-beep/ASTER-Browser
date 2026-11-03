@@ -1030,7 +1030,7 @@ public class MainActivity extends Activity {
     }
 
     private void addMenuTile(LinearLayout row, String icon, String label, AlertDialog dialog, Runnable action) {
-        TextView tile = button(icon + "\\n" + label, 13);
+        TextView tile = button(icon + "\n" + label, 13);
         tile.setTypeface(Typeface.DEFAULT_BOLD);
         tile.setGravity(Gravity.CENTER);
         tile.setMinHeight(dp(76));
