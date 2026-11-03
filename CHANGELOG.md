@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.15.1] - 2026-11-03
+### Fixed
+- Forces a one-time download of the expanded ASTER Shield filter set after upgrading, even if the previous version refreshed its older lists less than 24 hours ago.
+
+
 ## [0.15.0] - 2026-11-03
 ### Improved
 - Expanded ASTER Shield with EasyList, EasyPrivacy, AdGuard Base, AdGuard Tracking Protection, AdGuard Mobile Ads, and Peter Lowe ad-server domain filters.
