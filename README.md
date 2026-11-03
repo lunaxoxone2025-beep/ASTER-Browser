@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Current Android version: **0.13.0**.
+Current Android version: **0.14.0**.
 
 ASTER is an Android-first browser prototype with a dark violet interface, tabbed browsing, bookmarks, history, downloads, and privacy controls. Its visual direction is original and takes broad inspiration from modern browsers such as Brave and Opera GX.
 
@@ -23,6 +23,20 @@ ASTER currently uses Android System WebView. It is not a standalone Chromium bro
 - Customize the start page by showing or hiding ASTER branding, quick-access shortcuts, and bookmarks.
 - Choose one of four backgrounds: Violet, Midnight, Ocean, or Crimson.
 - View open tabs in a two-column card layout with page titles, domains, active-tab highlighting, close controls, and a quick new-tab action.
+
+## Cross-device usability and navigation
+
+ASTER adapts its browser chrome to compact Android phones and expanded windows on tablets, foldables, and other resizable Android devices. It also supports:
+- Desktop-site mode.
+- Reader Mode for simplified article reading.
+- Page translation through Google Translate, with a selectable target language.
+- Adjustable webpage text size.
+- File uploads through Android's system file picker.
+- Opening HTTP/HTTPS links from other apps when ASTER is selected as the browser.
+- Hardware keyboard shortcuts: Ctrl+L (address bar), Ctrl+T (new tab), Ctrl+W (close tab), Ctrl+R (reload), Ctrl+Tab / Ctrl+Shift+Tab (cycle tabs), and Esc (exit Reader Mode).
+- Backup and restore for the new display preferences.
+
+ASTER remains an Android application; responsive layouts do not make it a native iOS, Windows, or macOS browser. Desktop-site mode still uses Android System WebView. Translation requires an internet connection, and Reader Mode may not extract every complex page perfectly.
 
 ## Backup and restore
 
