@@ -1,5 +1,7 @@
 # ASTER Browser
 
+Current Android version: **0.11.0**.
+
 A modern Android-first browser prototype, with a planned desktop version.
 
 ## Project status
