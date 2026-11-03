@@ -1,45 +1,30 @@
-# ASTER Browser — Android MVP 0.6.1
+# ASTER Browser
 
-ASTER es un navegador Android en desarrollo, con una interfaz oscura y minimalista, accesos rápidos, navegación por pestañas y controles pensados para pantallas móviles. Su lenguaje visual toma como referencia la claridad y la estructura de navegadores modernos como Brave, pero mantiene la identidad propia de ASTER.
+Versión Android actual: **0.12.0**.
 
-## Novedades de 0.6.0
-- Rediseño de la barra superior y la barra de navegación inferior.
-- Barra de direcciones con controles separados y áreas táctiles más cómodas.
-- Página de inicio renovada con buscador, accesos rápidos y estado de privacidad básico.
-- Publicación automática de una GitHub Release con el APK cuando la compilación termina correctamente.
-- Ajustes de tamaños y espaciados para pantallas Android con distintas densidades.
+ASTER es un navegador para Android en desarrollo, con pestañas, marcadores, historial, descargas y controles de privacidad. La nueva dirección visual utiliza tonos oscuros violetas, una página de inicio renovada y controles inspirados de forma general en navegadores modernos como Brave y Opera GX, manteniendo una identidad propia.
 
-## Funciones actuales
-- Página de inicio ASTER con buscador, accesos rápidos y marcadores recientes.
-- Buscador configurable: Google, DuckDuckGo o Bing.
-- Página de inicio web configurable.
-- Atrás, adelante, inicio, recarga y selector de pestañas.
-- Hasta 8 pestañas; las inactivas se pausan para reducir trabajo en segundo plano.
-- Restauración local de pestañas.
-- Barra de progreso de carga.
-- Descargas mediante Android DownloadManager.
-- Búsqueda dentro de la página y uso del menú Compartir de Android.
-- Marcadores e historial locales.
-- Limpieza de historial, cookies, caché y datos web.
-- Preferencias guardadas localmente.
+## Motor y plataforma
 
-## Privacidad y seguridad
-- El acceso web a contenido file:// y content:// está desactivado.
-- El contenido mixto inseguro está bloqueado.
-- Las cookies de terceros están desactivadas.
-- Safe Browsing se habilita cuando está disponible en Android.
+ASTER utiliza actualmente Android System WebView. No es un navegador Chromium independiente y, por tanto, algunas funciones avanzadas de otros navegadores no están disponibles.
 
-**Importante:** ASTER todavía no incluye un bloqueador avanzado de rastreadores ni un motor de renderizado propio. La navegación utiliza Android System WebView, que depende del componente WebView/Chrome instalado en el dispositivo.
+## ASTER Shield — bloqueo de anuncios y rastreadores
 
-## Descargar
-Cuando una compilación termina correctamente, GitHub Actions crea o actualiza automáticamente una publicación en **Releases** y adjunta el archivo `app-debug.apk`.
+- Importa reglas de red basadas en dominios compatibles desde EasyList y EasyPrivacy.
+- Mantiene reglas locales en caché y actualiza las listas semanalmente cuando hay conexión.
+- Permite actualizar los filtros manualmente desde el panel Shield.
+- Incluye protección global, excepciones por sitio y contadores de solicitudes bloqueadas.
 
-- Abre [Releases](https://github.com/lunaxoxone2025-beep/ASTER-Browser/releases).
-- Entra en la versión más reciente.
-- Descarga `app-debug.apk` e instálalo en Android.
-- Si Android lo solicita, autoriza la instalación desde esa fuente.
+**Limitación importante:** la integración actual con WebView solo aplica reglas de red basadas en dominios. No aplica selectores cosméticos CSS, scriptlets ni todas las opciones avanzadas de ABP. Por eso puede bloquear muchas solicitudes de publicidad y rastreo, pero algunos anuncios o espacios vacíos pueden seguir apareciendo. No promete el mismo nivel de bloqueo que Brave.
 
-El APK de estas versiones es una compilación de depuración, no una versión firmada para distribución comercial.
+## Copias de seguridad
 
-## Estado del proyecto
-ASTER sigue siendo un MVP. La interfaz y las funciones deben probarse en dispositivos reales; una compilación correcta de GitHub no sustituye las pruebas en un teléfono físico. La versión de escritorio se abordará en una fase posterior.
+En el menú del navegador, abre **Backup & restore** para exportar o importar marcadores, historial, ajustes y pestañas abiertas en un archivo JSON. No incluye cookies, contraseñas ni caché.
+
+## Actualizaciones
+
+ASTER comprueba si hay nuevas versiones en GitHub Releases y puede descargar el APK para abrir el instalador de Android. Android siempre exige confirmación. Para actualizar una instalación existente, todas las versiones deben estar firmadas con la misma clave permanente. Mientras no esté configurada, los APK de depuración son solo para pruebas y podrían no instalarse encima de una versión anterior.
+
+## Compilación
+
+El proyecto Android utiliza Gradle y Android Gradle Plugin. GitHub Actions se encarga de compilar el APK.
