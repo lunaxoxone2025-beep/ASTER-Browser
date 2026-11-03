@@ -814,12 +814,6 @@ public class MainActivity extends Activity {
             .setPositiveButton("+ New tab", (d, which) -> addTab(HOME_PAGE))
             .create();
         pendingTabsDialog = dialog;
-        for (int i = 0; i < list.getChildCount(); i++) {
-            View child = list.getChildAt(i);
-            if (child instanceof LinearLayout && i > 0) {
-                // The row listeners are attached below after the dialog exists.
-            }
-        }
         dialog.show();
     }
 
