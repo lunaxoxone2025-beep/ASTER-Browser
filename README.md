@@ -27,6 +27,12 @@ Small fixes and internal refinements may be included in the next release. Signif
 When permanent signing is configured, the release includes a signed APK suitable for updating an installation signed with the same key. Until then, releases contain source and notes only; debug APKs remain separate test artifacts.
 
 
+## ASTER Update
+
+ASTER checks GitHub Releases when the app starts, every 24 hours while it remains active, and on demand from **Settings → Check for updates**. When a newer release is found, the user can download its `ASTER-Browser.apk` asset and continue through Android's package installer. Android always requires user confirmation; silent installation is not supported.
+
+For updates to install over an existing copy, every release must be signed with the same permanent private key. Until repository signing is configured, debug APK releases are test builds and Android may reject them as updates to an already installed copy.
+
 ## Direct APK downloads
 
-Major GitHub Releases include a directly downloadable Android APK. If permanent signing is not configured, it is a debug test build and may not update an existing installation.
+Major GitHub Releases include a directly downloadable Android APK named `ASTER-Browser.apk`.
