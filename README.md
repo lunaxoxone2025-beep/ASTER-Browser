@@ -57,3 +57,22 @@ Release 0.15.0 delivers responsive Android layouts, Reader Mode, desktop-site mo
 
 
 Build verification trigger: automated Android APK build requested from the repository.
+
+## Interface themes
+
+- ASTER Night: original dark violet interface.
+- GX Neon: dark interface with neon red/pink accents, inspired by gaming browser aesthetics.
+- Liquid Glass: translucent glass-like panels, fine borders and a cool blue palette. The browser chrome uses a native translucent treatment; web start-page elements use CSS backdrop blur when supported by the installed Android WebView. Native blur intensity varies by Android version and device.
+
+## Private browsing
+
+The private window runs in a separate Android process and uses its own WebView data directory on Android 9 (API 28) and newer. Cookies are disabled, DOM storage and downloads are disabled, and its cache/history/form data are cleared when the window closes. Private windows do not write to ASTER's normal history or saved tab session. On Android versions older than 9, ASTER refuses to start private browsing rather than presenting a weaker mode as fully isolated.
+
+## Website permissions and transport security
+
+- Camera, microphone and location requests are shown to the user and require Android runtime permission where applicable.
+- Website permission management lists recent grants. Location grants can be cleared per origin; camera/microphone access can also be revoked from Android's app permission settings.
+- Non-HTTPS origins are not allowed to request camera, microphone or location.
+- TLS certificate errors are always cancelled. ASTER does not provide a bypass button for invalid certificates.
+
+These controls do not replace Android's system security model. Camera, microphone and location access also depend on the permissions granted to ASTER in Android Settings.
