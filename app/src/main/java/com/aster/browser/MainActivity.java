@@ -26,6 +26,10 @@ import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
+import android.webkit.GeolocationPermissions;
+import android.webkit.PermissionRequest;
+import android.webkit.SslErrorHandler;
+import android.net.http.SslError;
 import android.webkit.DownloadListener;
 import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
@@ -90,11 +94,11 @@ public class MainActivity extends Activity {
         "cdn.segment.com", "api.segment.io", "mixpanel.com", "amplitude.com"
     };
 
-    private final int BG = Color.rgb(13, 11, 18);
-    private final int PANEL = Color.rgb(30, 24, 39);
-    private final int TEXT = Color.rgb(241, 244, 250);
-    private final int MUTED = Color.rgb(174, 163, 190);
-    private final int ACCENT = Color.rgb(194, 112, 255);
+    private int BG = Color.rgb(13, 11, 18);
+    private int PANEL = Color.rgb(30, 24, 39);
+    private int TEXT = Color.rgb(241, 244, 250);
+    private int MUTED = Color.rgb(174, 163, 190);
+    private int ACCENT = Color.rgb(194, 112, 255);
 
     private LinearLayout root, toolbar, bottomBar;
     private FrameLayout webContainer;
@@ -108,6 +112,13 @@ public class MainActivity extends Activity {
     private AdBlockEngine adBlockEngine;
     private AlertDialog pendingTabsDialog;
     private ValueCallback<Uri[]> filePathCallback;
+    private static final int SITE_MEDIA_PERMISSION_REQUEST = 8201;
+    private static final int SITE_LOCATION_PERMISSION_REQUEST = 8202;
+    private PermissionRequest pendingMediaPermissionRequest;
+    private String pendingMediaPermissionOrigin;
+    private String[] pendingMediaPermissionResources;
+    private GeolocationPermissions.Callback pendingLocationCallback;
+    private String pendingLocationOrigin;
     private final Set<WebView> readerModeTabs = Collections.newSetFromMap(new ConcurrentHashMap<WebView, Boolean>());
     private final Map<WebView, String> topLevelHosts = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<WebView, AtomicInteger> pageBlockedCounts = new ConcurrentHashMap<>();
@@ -134,9 +145,10 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        prefs = getSharedPreferences("aster", MODE_PRIVATE);
+        configureThemeColors();
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
-        prefs = getSharedPreferences("aster", MODE_PRIVATE);
         adBlockEngine = new AdBlockEngine(this);
         buildUi();
         boolean restored = restoreSession();
@@ -332,7 +344,123 @@ public class MainActivity extends Activity {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
         d.setCornerRadius(dp(radius));
+        if (isLiquidGlassTheme()) {
+            d.setStroke(dp(1), Color.argb(105, 223, 239, 255));
+        }
         return d;
+    }
+
+    private boolean isLiquidGlassTheme() {
+        return "liquid".equals(prefs == null ? "aster" : prefs.getString("ui_theme", "aster"));
+    }
+
+    private void configureThemeColors() {
+        String theme = prefs == null ? "aster" : prefs.getString("ui_theme", "aster");
+        if ("gx".equals(theme)) {
+            BG = Color.rgb(15, 8, 13);
+            PANEL = Color.rgb(39, 18, 30);
+            TEXT = Color.rgb(255, 244, 248);
+            MUTED = Color.rgb(194, 158, 174);
+            ACCENT = Color.rgb(255, 54, 112);
+        } else if ("liquid".equals(theme)) {
+            BG = Color.rgb(10, 16, 29);
+            PANEL = Color.argb(165, 91, 111, 145);
+            TEXT = Color.rgb(247, 250, 255);
+            MUTED = Color.rgb(193, 207, 229);
+            ACCENT = Color.rgb(174, 218, 255);
+        } else {
+            BG = Color.rgb(13, 11, 18);
+            PANEL = Color.rgb(30, 24, 39);
+            TEXT = Color.rgb(241, 244, 250);
+            MUTED = Color.rgb(174, 163, 190);
+            ACCENT = Color.rgb(194, 112, 255);
+        }
+    }
+
+    private String currentThemeName() {
+        String theme = prefs.getString("ui_theme", "aster");
+        if ("gx".equals(theme)) return "GX Neon";
+        if ("liquid".equals(theme)) return "Liquid Glass";
+        return "ASTER Night";
+    }
+
+    private void applyThemeToViews() {
+        getWindow().setStatusBarColor(BG);
+        getWindow().setNavigationBarColor(BG);
+        if (root != null) root.setBackgroundColor(BG);
+        if (toolbar != null) toolbar.setBackgroundColor(
+            isLiquidGlassTheme() ? Color.argb(150, 18, 27, 46) : BG);
+        if (address != null) {
+            address.setTextColor(TEXT);
+            address.setHintTextColor(MUTED);
+            address.setBackground(rounded(PANEL, 18));
+        }
+        if (bottomBar != null) {
+            bottomBar.setBackgroundColor(isLiquidGlassTheme()
+                ? Color.argb(155, 19, 30, 49)
+                : ("gx".equals(prefs.getString("ui_theme", "aster")) ? Color.rgb(30, 10, 20) : Color.rgb(17, 13, 23)));
+            for (int i = 0; i < bottomBar.getChildCount(); i++) {
+                View child = bottomBar.getChildAt(i);
+                child.setBackground(rounded(PANEL, 16));
+                if (child instanceof TextView) ((TextView) child).setTextColor(TEXT);
+            }
+        }
+        if (progressBar != null) {
+            progressBar.setProgressTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+            progressBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(BG));
+        }
+    }
+
+    private void applySelectedTheme(String theme) {
+        prefs.edit().putString("ui_theme", theme).apply();
+        configureThemeColors();
+        applyThemeToViews();
+        for (WebView tab : tabs) {
+            if (HOME_PAGE.equals(tab.getTag())) loadStartPage(tab);
+        }
+        Toast.makeText(this, currentThemeName() + " theme applied", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showThemePicker() {
+        String[] labels = {
+            "ASTER Night — original violet",
+            "GX Neon — dark with neon red/pink accents",
+            "Liquid Glass — translucent glass-like panels"
+        };
+        String[] values = {"aster", "gx", "liquid"};
+        String current = prefs.getString("ui_theme", "aster");
+        int checked = 0;
+        for (int i = 0; i < values.length; i++) if (values[i].equals(current)) checked = i;
+        new AlertDialog.Builder(this)
+            .setTitle("Interface & themes")
+            .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                dialog.dismiss();
+                applySelectedTheme(values[which]);
+            })
+            .setNegativeButton("Close", null)
+            .setMessage("Liquid Glass uses translucent surfaces and fine highlights. The amount of system blur depends on Android and the device.")
+            .show();
+    }
+
+    private void openPrivateWindow() {
+        if (Build.VERSION.SDK_INT < 28) {
+            new AlertDialog.Builder(this)
+                .setTitle("Private browsing unavailable")
+                .setMessage("An isolated private WebView profile requires Android 9 or newer.")
+                .setPositiveButton("OK", null).show();
+            return;
+        }
+        startActivity(new Intent(this, PrivateActivity.class));
+    }
+
+    private void openAndroidPermissionSettings() {
+        try {
+            Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:" + getPackageName()));
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Open ASTER permissions from Android Settings", Toast.LENGTH_LONG).show();
+        }
     }
 
     private TextView button(String label, int size) {
@@ -470,6 +598,7 @@ public class MainActivity extends Activity {
             });
         }
         root.addView(bottomBar);
+        applyThemeToViews();
         applyResponsiveLayout();
     }
 
@@ -524,6 +653,22 @@ public class MainActivity extends Activity {
             confirmDownload(url, userAgent, contentDisposition, mimeType));
 
         w.setWebChromeClient(new WebChromeClient() {
+            @Override public void onPermissionRequest(PermissionRequest request) {
+                runOnUiThread(() -> promptForMediaPermission(request));
+            }
+
+            @Override public void onPermissionRequestCanceled(PermissionRequest request) {
+                if (request == pendingMediaPermissionRequest) {
+                    pendingMediaPermissionRequest = null;
+                    pendingMediaPermissionOrigin = null;
+                    pendingMediaPermissionResources = null;
+                }
+            }
+
+            @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                runOnUiThread(() -> promptForLocationPermission(origin, callback));
+            }
+
             @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (filePathCallback != null) filePathCallback.onReceiveValue(null);
                 filePathCallback = callback;
@@ -582,6 +727,14 @@ public class MainActivity extends Activity {
                     Toast.makeText(MainActivity.this, "No app can open this link", Toast.LENGTH_SHORT).show();
                 }
                 return true;
+            }
+
+            @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                // Never let users bypass an invalid or untrusted TLS certificate.
+                handler.cancel();
+                if (view == current()) {
+                    Toast.makeText(MainActivity.this, "ASTER blocked a page with an invalid security certificate", Toast.LENGTH_LONG).show();
+                }
             }
 
             @Override public void onPageFinished(WebView view, String url) {
@@ -878,7 +1031,18 @@ public class MainActivity extends Activity {
         if ("midnight".equals(homeTheme)) background = "#29354b 0%,#141b29 45%,#090d15 100%";
         else if ("ocean".equals(homeTheme)) background = "#12475a 0%,#102530 45%,#080e14 100%";
         else if ("crimson".equals(homeTheme)) background = "#512538 0%,#21131e 45%,#0d0b11 100%";
+        String uiTheme = prefs.getString("ui_theme", "aster");
+        if ("gx".equals(uiTheme)) background = "#55152d 0%,#24101f 48%,#10080e 100%";
+        else if ("liquid".equals(uiTheme)) background = "#42628c 0%,#1e2f4a 48%,#0a1020 100%";
         html.append("body{background:radial-gradient(ellipse at 50% 8%,").append(background).append(");color:#f5f2fa;font-family:Arial, sans-serif}");
+        if ("gx".equals(uiTheme)) {
+            html.append(".logo{background:linear-gradient(145deg,#ff6b9f,#ff245e 62%,#8d123e);box-shadow:0 12px 42px #ff245e55}");
+            html.append("form{background:#261321;border-color:#a82c5b}button{background:linear-gradient(135deg,#ff5b91,#c51450)}.site{background:#241321;border-color:#71304d}");
+        } else if ("liquid".equals(uiTheme)) {
+            html.append("form,.site{background:rgba(220,235,255,.12);border:1px solid rgba(235,245,255,.32);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);box-shadow:0 14px 42px rgba(0,0,0,.22)}");
+            html.append("button{background:linear-gradient(135deg,rgba(221,238,255,.58),rgba(139,184,235,.42));color:#102039;border:1px solid rgba(255,255,255,.4)}");
+            html.append(".logo{background:linear-gradient(145deg,rgba(255,255,255,.88),rgba(135,180,231,.52));color:#14253d;box-shadow:0 12px 42px #9bcaff44}");
+        }
         html.append(".page{min-height:100vh;max-width:720px;margin:auto;padding:clamp(42px,12vh,110px) 22px 34px;display:flex;flex-direction:column;align-items:center}");
         html.append(".logo{width:62px;height:62px;border-radius:21px;display:grid;place-items:center;background:linear-gradient(145deg,#f08cff,#8d4dff 62%,#5431b8);color:#fff;font-size:30px;font-weight:900;box-shadow:0 12px 42px #9b4dff55}");
         html.append(".name{margin-top:16px;font-size:23px;font-weight:900;letter-spacing:4px}.tag{margin-top:7px;color:#b5a9c8;font-size:12px;letter-spacing:.7px}");
@@ -1253,7 +1417,13 @@ public class MainActivity extends Activity {
 
         LinearLayout row7 = new LinearLayout(this);
         addMenuTile(row7, "文", "Translate page", dialog, () -> translateCurrentPage());
+        addMenuTile(row7, "✧", "Interface themes", dialog, () -> showThemePicker());
         panel.addView(row7);
+
+        LinearLayout row8 = new LinearLayout(this);
+        addMenuTile(row8, "◉", "Private window", dialog, () -> openPrivateWindow());
+        addMenuTile(row8, "♙", "Site permissions", dialog, () -> showSitePermissionsManager());
+        panel.addView(row8);
 
         dialog.show();
     }
@@ -1573,6 +1743,8 @@ public class MainActivity extends Activity {
             "Search engine: " + getSearchEngineName(),
             "Homepage: " + homepage,
             "Customize start page",
+            "Interface theme: " + currentThemeName(),
+            "Manage site permissions",
             "Desktop site: " + (prefs.getBoolean("desktop_site", false) ? "On" : "Off"),
             "Text size: " + prefs.getInt("text_zoom", 100) + "%",
             "Translation language: " + translationLanguageName(prefs.getString("translate_language", "es")),
@@ -1584,16 +1756,18 @@ public class MainActivity extends Activity {
             if (which == 0) chooseSearchEngine();
             else if (which == 1) editHomepage();
             else if (which == 2) showStartPageCustomization();
-            else if (which == 3) toggleDesktopSite();
-            else if (which == 4) chooseTextSize();
-            else if (which == 5) chooseTranslationLanguage();
-            else if (which == 6) chooseRestoreTabs();
-            else if (which == 7) {
+            else if (which == 3) showThemePicker();
+            else if (which == 4) showSitePermissionsManager();
+            else if (which == 5) toggleDesktopSite();
+            else if (which == 6) chooseTextSize();
+            else if (which == 7) chooseTranslationLanguage();
+            else if (which == 8) chooseRestoreTabs();
+            else if (which == 9) {
                 Toast.makeText(this, "Checking for updates…", Toast.LENGTH_SHORT).show();
                 checkForUpdates(true);
-            } else if (which == 8) {
+            } else if (which == 10) {
                 new AlertDialog.Builder(this).setTitle("ASTER Browser")
-                    .setMessage("Version " + BuildConfig.VERSION_NAME + "\nAdaptive layout, reader mode, desktop site mode and translation are available. Updates always require your confirmation in Android.")
+                    .setMessage("Version " + BuildConfig.VERSION_NAME + "\nIncludes theme presets, isolated private browsing on Android 9+, per-site runtime permission prompts and strict TLS certificate blocking.")
                     .setPositiveButton("Check now", (dialog, button) -> checkForUpdates(true))
                     .setNegativeButton("Close", null).show();
             }
@@ -1823,6 +1997,15 @@ public class MainActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == SITE_MEDIA_PERMISSION_REQUEST) {
+            grantPendingMediaPermission();
+            return;
+        }
+        if (requestCode == SITE_LOCATION_PERMISSION_REQUEST) {
+            boolean granted = hasLocationPermission();
+            finishPendingLocationPermission(granted);
+            return;
+        }
         if (requestCode == DOWNLOAD_PERMISSION_REQUEST) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startPendingDownload();
@@ -1831,6 +2014,174 @@ public class MainActivity extends Activity {
                 clearPendingDownload();
             }
         }
+    }
+
+    private boolean isSecureOrigin(String origin) {
+        return origin != null && origin.regionMatches(true, 0, "https://", 0, 8);
+    }
+
+    private void promptForMediaPermission(PermissionRequest request) {
+        if (request == null) return;
+        String origin = request.getOrigin() == null ? "" : request.getOrigin().toString();
+        if (!isSecureOrigin(origin)) {
+            request.deny();
+            return;
+        }
+        List<String> approved = new ArrayList<>();
+        boolean camera = false;
+        boolean microphone = false;
+        for (String resource : request.getResources()) {
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
+                approved.add(resource);
+                camera = true;
+            } else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
+                approved.add(resource);
+                microphone = true;
+            }
+        }
+        if (approved.isEmpty()) {
+            request.deny();
+            return;
+        }
+        StringBuilder detail = new StringBuilder("Allow ");
+        if (camera && microphone) detail.append("camera and microphone");
+        else if (camera) detail.append("camera");
+        else detail.append("microphone");
+        detail.append(" access for ").append(origin).append("?");
+
+        boolean needsCamera = camera;
+        boolean needsMicrophone = microphone;
+        String[] resources = approved.toArray(new String[0]);
+        new AlertDialog.Builder(this)
+            .setTitle("Website permission")
+            .setMessage(detail.toString() + "\n\nAndroid may show a second system permission request.")
+            .setNegativeButton("Block", (d, w) -> request.deny())
+            .setPositiveButton("Allow", (d, w) -> {
+                pendingMediaPermissionRequest = request;
+                pendingMediaPermissionOrigin = origin;
+                pendingMediaPermissionResources = resources;
+                List<String> missing = new ArrayList<>();
+                if (needsCamera && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    missing.add(Manifest.permission.CAMERA);
+                }
+                if (needsMicrophone && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    missing.add(Manifest.permission.RECORD_AUDIO);
+                }
+                if (!missing.isEmpty()) requestPermissions(missing.toArray(new String[0]), SITE_MEDIA_PERMISSION_REQUEST);
+                else grantPendingMediaPermission();
+            }).show();
+    }
+
+    private void grantPendingMediaPermission() {
+        PermissionRequest request = pendingMediaPermissionRequest;
+        String origin = pendingMediaPermissionOrigin;
+        String[] resources = pendingMediaPermissionResources;
+        pendingMediaPermissionRequest = null;
+        pendingMediaPermissionOrigin = null;
+        pendingMediaPermissionResources = null;
+        if (request == null || resources == null) return;
+        boolean allowed = true;
+        for (String resource : resources) {
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)
+                && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) allowed = false;
+            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)
+                && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) allowed = false;
+        }
+        if (allowed) {
+            request.grant(resources);
+            rememberSitePermission("Camera/Microphone", origin);
+        } else {
+            request.deny();
+            Toast.makeText(this, "Android permission was not granted", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void promptForLocationPermission(String origin, GeolocationPermissions.Callback callback) {
+        if (callback == null) return;
+        if (!isSecureOrigin(origin)) {
+            callback.invoke(origin, false, false);
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Location permission")
+            .setMessage("Allow " + origin + " to access your device location? You can revoke this later in ASTER or Android settings.")
+            .setNegativeButton("Block", (d, w) -> callback.invoke(origin, false, false))
+            .setPositiveButton("Allow", (d, w) -> {
+                pendingLocationOrigin = origin;
+                pendingLocationCallback = callback;
+                if (hasLocationPermission()) {
+                    finishPendingLocationPermission(true);
+                } else {
+                    requestPermissions(new String[]{
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    }, SITE_LOCATION_PERMISSION_REQUEST);
+                }
+            }).show();
+    }
+
+    private boolean hasLocationPermission() {
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void finishPendingLocationPermission(boolean granted) {
+        GeolocationPermissions.Callback callback = pendingLocationCallback;
+        String origin = pendingLocationOrigin;
+        pendingLocationCallback = null;
+        pendingLocationOrigin = null;
+        if (callback != null && origin != null) callback.invoke(origin, granted, false);
+        if (granted && origin != null) rememberSitePermission("Location", origin);
+    }
+
+    private void rememberSitePermission(String type, String origin) {
+        Set<String> entries = new LinkedHashSet<>(prefs.getStringSet("site_permission_log", new LinkedHashSet<>()));
+        entries.remove(type + "||" + origin);
+        entries.add(type + "||" + origin);
+        prefs.edit().putStringSet("site_permission_log", entries).apply();
+    }
+
+    private void showSitePermissionsManager() {
+        Set<String> saved = new LinkedHashSet<>(prefs.getStringSet("site_permission_log", new LinkedHashSet<>()));
+        List<String> entries = new ArrayList<>(saved);
+        if (entries.isEmpty()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Site permissions")
+                .setMessage("ASTER has not granted camera, microphone or location access to any website yet. Every request is shown before access is granted.")
+                .setPositiveButton("Android app permissions", (d, w) -> openAndroidPermissionSettings())
+                .setNegativeButton("Close", null).show();
+            return;
+        }
+        String[] labels = new String[entries.size()];
+        for (int i = 0; i < entries.size(); i++) labels[i] = entries.get(i).replace("||", "  ·  ");
+        new AlertDialog.Builder(this)
+            .setTitle("Recent website grants")
+            .setItems(labels, (dialog, which) -> {
+                String[] parts = entries.get(which).split("\\|\\|", 2);
+                String type = parts[0];
+                String origin = parts.length > 1 ? parts[1] : "";
+                new AlertDialog.Builder(this)
+                    .setTitle("Manage " + type)
+                    .setMessage(origin + "\n\nRemove this remembered record? Location access will also be revoked for this origin. Camera and microphone are additionally controlled by Android's app-level permission settings.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Remove", (d, w) -> {
+                        if ("Location".equals(type)) GeolocationPermissions.getInstance().clear(origin);
+                        Set<String> updated = new LinkedHashSet<>(prefs.getStringSet("site_permission_log", new LinkedHashSet<>()));
+                        updated.remove(entries.get(which));
+                        prefs.edit().putStringSet("site_permission_log", updated).apply();
+                        Toast.makeText(this, "Permission record removed", Toast.LENGTH_SHORT).show();
+                    })
+                    .setNeutralButton("Android settings", (d, w) -> openAndroidPermissionSettings())
+                    .show();
+            })
+            .setPositiveButton("Clear all location grants", (d, w) -> {
+                GeolocationPermissions.getInstance().clearAll();
+                prefs.edit().remove("site_permission_log").apply();
+                Toast.makeText(this, "Website location grants cleared", Toast.LENGTH_SHORT).show();
+            })
+            .setNeutralButton("Android app permissions", (d, w) -> openAndroidPermissionSettings())
+            .setNegativeButton("Close", null)
+            .show();
     }
 
     private void findInPage() {
@@ -1916,6 +2267,15 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         updateHandler.removeCallbacks(periodicUpdateCheck);
         if (filePathCallback != null) { filePathCallback.onReceiveValue(null); filePathCallback = null; }
+        if (pendingMediaPermissionRequest != null) {
+            try { pendingMediaPermissionRequest.deny(); } catch (Exception ignored) {}
+            pendingMediaPermissionRequest = null;
+        }
+        if (pendingLocationCallback != null && pendingLocationOrigin != null) {
+            try { pendingLocationCallback.invoke(pendingLocationOrigin, false, false); } catch (Exception ignored) {}
+            pendingLocationCallback = null;
+            pendingLocationOrigin = null;
+        }
         if (updateReceiverRegistered) {
             try { unregisterReceiver(updateDownloadReceiver); } catch (Exception ignored) {}
             updateReceiverRegistered = false;
