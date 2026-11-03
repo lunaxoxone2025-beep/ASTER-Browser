@@ -16,7 +16,7 @@ ASTER currently uses Android System WebView. It is not a standalone Chromium bro
 - Supports global protection and per-site exceptions.
 - Tracks blocked requests per page and per session.
 
-**Important limitation:** the current WebView integration extracts domain-based network rules. It does not implement cosmetic CSS selectors, scriptlets, every ABP option, or advanced first-party ad removal. Therefore it can block many ad/tracker requests, but it cannot guarantee an ad-free page or match Brave's native Shields engine.
+**Important limitation:** Android WebView does not expose the full network and cosmetic-filtering hooks of a dedicated browser engine. YouTube can serve in-stream ads from the same infrastructure as video, so ASTER cannot reliably block every video ad without risking playback. This is stronger than the previous host-only build, but it is not a full uBlock Origin or Brave Shields engine.
 
 ## Start page and tabs
 
@@ -53,4 +53,4 @@ The Android project uses Gradle and Android Gradle Plugin. GitHub Actions builds
 
 
 
-Release 0.14.0 delivers responsive Android layouts, Reader Mode, desktop-site mode, page translation, adjustable text size, system file uploads, external link handling, and keyboard navigation.
+Release 0.15.0 delivers responsive Android layouts, Reader Mode, desktop-site mode, page translation, adjustable text size, system file uploads, external link handling, and keyboard navigation.
