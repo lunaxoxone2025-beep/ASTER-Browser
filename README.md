@@ -54,3 +54,6 @@ The Android project uses Gradle and Android Gradle Plugin. GitHub Actions builds
 
 
 Release 0.15.0 delivers responsive Android layouts, Reader Mode, desktop-site mode, page translation, adjustable text size, system file uploads, external link handling, and keyboard navigation.
+
+
+Build verification trigger: automated Android APK build requested from the repository.
