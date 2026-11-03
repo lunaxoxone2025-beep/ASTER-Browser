@@ -38,4 +38,4 @@ The Android project uses Gradle and Android Gradle Plugin. GitHub Actions builds
 
 
 
-Release 0.13.0 adds start-page customization, four visual themes, and a card-based tab switcher, while retaining ASTER Shield network filtering.
+Release 0.13.0 adds start-page customization, four visual themes, and a card-based tab switcher, while retaining ASTER Shield network filtering. [release]
