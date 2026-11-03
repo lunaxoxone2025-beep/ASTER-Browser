@@ -92,8 +92,8 @@ public class MainActivity extends Activity {
     private int active = 0;
     private SharedPreferences prefs;
     private final Map<WebView, String> topLevelHosts = new ConcurrentHashMap<>();
-    private final Map<WebView, AtomicInteger> pageBlockedCounts = new ConcurrentHashMap<>();
-    private final Map<String, AtomicInteger> blockedDomainCounts = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<WebView, AtomicInteger> pageBlockedCounts = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicInteger> blockedDomainCounts = new ConcurrentHashMap<>();
     private final AtomicInteger totalBlockedRequests = new AtomicInteger(0);
 
     @Override public void onCreate(Bundle state) {
@@ -352,7 +352,7 @@ public class MainActivity extends Activity {
         return true;
     }
 
-    private <K> void incrementCounter(Map<K, AtomicInteger> counters, K key) {
+    private <K> void incrementCounter(ConcurrentHashMap<K, AtomicInteger> counters, K key) {
         AtomicInteger counter = counters.get(key);
         if (counter == null) {
             AtomicInteger created = new AtomicInteger(0);
