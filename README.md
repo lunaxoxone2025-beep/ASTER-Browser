@@ -25,3 +25,8 @@ ASTER Shield is a lightweight request blocker implemented with Android WebView r
 Small fixes and internal refinements may be included in the next release. Significant feature updates receive a version bump and a GitHub Release with release notes. The Android workflow publishes a release when a commit on `main` is marked with `[release]`, or when a version tag such as `v0.10.0` is pushed.
 
 When permanent signing is configured, the release includes a signed APK suitable for updating an installation signed with the same key. Until then, releases contain source and notes only; debug APKs remain separate test artifacts.
+
+
+## Direct APK downloads
+
+Major GitHub Releases include a directly downloadable Android APK. If permanent signing is not configured, it is a debug test build and may not update an existing installation.
