@@ -34,6 +34,7 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -422,6 +423,24 @@ public class MainActivity extends Activity {
         current().reload();
     }
 
+    private TextView panelText(String value, int size, int color) {
+        TextView text = new TextView(this);
+        text.setText(value);
+        text.setTextSize(size);
+        text.setTextColor(color);
+        text.setGravity(Gravity.CENTER_VERTICAL);
+        return text;
+    }
+
+    private void addPanelAction(LinearLayout panel, String label, Runnable action) {
+        TextView button = chromeButton(label, 14, label);
+        button.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(48));
+        params.topMargin = dp(9);
+        panel.addView(button, params);
+        button.setOnClickListener(v -> action.run());
+    }
+
     private void showPrivacyPanel() {
         if (tabs.isEmpty()) return;
         boolean enabled = prefs.getBoolean("shield_enabled", true);
@@ -430,31 +449,97 @@ public class MainActivity extends Activity {
         AtomicInteger pageCount = pageBlockedCounts.get(current());
         int pageTotal = pageCount == null ? 0 : pageCount.get();
 
-        String message = "ASTER Shield\n"
-            + "Ad and tracker blocking: " + (enabled ? "ON" : "OFF") + "\n"
-            + "Current site: " + (host == null ? "New tab" : host) + "\n"
-            + "Site protection: " + (excepted ? "PAUSED" : "ACTIVE") + "\n\n"
-            + "Blocked on this page: " + pageTotal + "\n"
-            + "Blocked this session: " + totalBlockedRequests.get()
-            + "\n\nThe built-in list blocks known ad and analytics domains. Some ads may still appear.";
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(18), dp(10), dp(18), dp(14));
+        panel.setBackgroundColor(BG);
 
-        String globalAction = enabled ? "Turn off protection everywhere" : "Turn on protection everywhere";
-        String siteAction = excepted ? "Restore protection on this site" : "Pause protection on this site";
-        String[] actions = {globalAction, siteAction, "View blocked domains"};
-        new AlertDialog.Builder(this).setTitle("ASTER Shield")
-            .setMessage(message)
-            .setItems(actions, (dialog, which) -> {
-                if (which == 0) {
-                    boolean next = !prefs.getBoolean("shield_enabled", true);
-                    prefs.edit().putBoolean("shield_enabled", next).apply();
-                    Toast.makeText(this, next ? "ASTER Shield enabled" : "ASTER Shield disabled", Toast.LENGTH_SHORT).show();
-                    current().reload();
-                } else if (which == 1) {
-                    toggleCurrentSiteException();
-                } else {
-                    showBlockedDomains();
-                }
-            }).setNegativeButton("Close", null).show();
+        TextView heading = panelText("ASTER SHIELD", 19, TEXT);
+        heading.setTypeface(Typeface.DEFAULT_BOLD);
+        panel.addView(heading);
+
+        TextView subtitle = panelText("Privacy protection for the pages you visit", 13, MUTED);
+        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(-1, -2);
+        subtitleParams.topMargin = dp(4);
+        panel.addView(subtitle, subtitleParams);
+
+        LinearLayout statusCard = new LinearLayout(this);
+        statusCard.setOrientation(LinearLayout.VERTICAL);
+        statusCard.setPadding(dp(14), dp(13), dp(14), dp(13));
+        statusCard.setBackground(rounded(PANEL, 18));
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
+        cardParams.topMargin = dp(16);
+        panel.addView(statusCard, cardParams);
+
+        TextView state = panelText(enabled ? "●  PROTECTION ACTIVE" : "○  PROTECTION PAUSED", 14, enabled ? ACCENT : MUTED);
+        state.setTypeface(Typeface.DEFAULT_BOLD);
+        statusCard.addView(state);
+        TextView site = panelText("Current site: " + (host == null ? "New tab" : host), 13, TEXT);
+        LinearLayout.LayoutParams siteParams = new LinearLayout.LayoutParams(-1, -2);
+        siteParams.topMargin = dp(8);
+        statusCard.addView(site, siteParams);
+        TextView siteState = panelText("This site: " + (excepted ? "Protection paused" : "Protected"), 12, MUTED);
+        LinearLayout.LayoutParams siteStateParams = new LinearLayout.LayoutParams(-1, -2);
+        siteStateParams.topMargin = dp(3);
+        statusCard.addView(siteState, siteStateParams);
+
+        LinearLayout stats = new LinearLayout(this);
+        stats.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams statsParams = new LinearLayout.LayoutParams(-1, -2);
+        statsParams.topMargin = dp(12);
+        panel.addView(stats, statsParams);
+        addShieldStat(stats, String.valueOf(pageTotal), "THIS PAGE");
+        addShieldStat(stats, String.valueOf(totalBlockedRequests.get()), "THIS SESSION");
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Privacy & protection")
+            .setView(panel)
+            .setNegativeButton("Close", null)
+            .create();
+
+        addPanelAction(panel, enabled ? "Pause protection everywhere" : "Enable protection everywhere", () -> {
+            prefs.edit().putBoolean("shield_enabled", !prefs.getBoolean("shield_enabled", true)).apply();
+            dialog.dismiss();
+            current().reload();
+            Toast.makeText(this, prefs.getBoolean("shield_enabled", true) ? "ASTER Shield enabled" : "ASTER Shield disabled", Toast.LENGTH_SHORT).show();
+        });
+        if (host != null) {
+            addPanelAction(panel, excepted ? "Restore protection on this site" : "Pause protection on this site", () -> {
+                dialog.dismiss();
+                toggleCurrentSiteException();
+            });
+        }
+        addPanelAction(panel, "View blocked domains", () -> {
+            dialog.dismiss();
+            showBlockedDomains();
+        });
+
+        TextView note = panelText("ASTER Shield uses a compact built-in list of known ad and analytics domains. It does not block every ad or tracking method.", 11, MUTED);
+        note.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams noteParams = new LinearLayout.LayoutParams(-1, -2);
+        noteParams.topMargin = dp(13);
+        panel.addView(note, noteParams);
+        dialog.show();
+    }
+
+    private void addShieldStat(LinearLayout parent, String value, String label) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(12), dp(12), dp(12), dp(12));
+        card.setBackground(rounded(PANEL, 16));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
+        params.rightMargin = dp(5);
+        params.leftMargin = dp(5);
+        parent.addView(card, params);
+        TextView number = panelText(value, 22, ACCENT);
+        number.setTypeface(Typeface.DEFAULT_BOLD);
+        number.setGravity(Gravity.CENTER);
+        card.addView(number);
+        TextView caption = panelText(label, 10, MUTED);
+        caption.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams captionParams = new LinearLayout.LayoutParams(-1, -2);
+        captionParams.topMargin = dp(3);
+        card.addView(caption, captionParams);
     }
 
     private void showBlockedDomains() {
@@ -667,34 +752,104 @@ public class MainActivity extends Activity {
     }
 
     private void showTabs() {
-        String[] names = new String[tabs.size() + 1];
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        scroll.addView(list);
+
+        TextView summary = panelText(tabs.size() + " of " + MAX_TABS + " tabs open", 13, MUTED);
+        summary.setPadding(dp(4), dp(5), dp(4), dp(12));
+        list.addView(summary);
+
         for (int i = 0; i < tabs.size(); i++) {
-            String title = tabs.get(i).getTitle();
-            names[i] = (i == active ? "✓ " : "") + (title == null || title.trim().isEmpty() ? "New tab" : title);
+            final int index = i;
+            WebView tab = tabs.get(i);
+            String title = tab.getTitle();
+            if (title == null || title.trim().isEmpty()) title = "New tab";
+            String url = tab.getUrl();
+            if (url == null || HOME_PAGE.equals(tab.getTag())) url = "ASTER start page";
+
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(12), dp(10), dp(8), dp(10));
+            row.setBackground(rounded(i == active ? Color.rgb(48, 43, 39) : PANEL, 16));
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+            rowParams.bottomMargin = dp(8);
+            list.addView(row, rowParams);
+
+            LinearLayout details = new LinearLayout(this);
+            details.setOrientation(LinearLayout.VERTICAL);
+            details.setPadding(0, dp(2), dp(8), dp(2));
+            row.addView(details, new LinearLayout.LayoutParams(0, -2, 1));
+
+            TextView titleView = panelText((i == active ? "●  " : "") + title, 14, TEXT);
+            titleView.setTypeface(i == active ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+            details.addView(titleView);
+            TextView urlView = panelText(url, 11, MUTED);
+            urlView.setMaxLines(1);
+            urlView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams urlParams = new LinearLayout.LayoutParams(-1, -2);
+            urlParams.topMargin = dp(3);
+            details.addView(urlView, urlParams);
+
+            TextView close = chromeButton("×", 20, "Close tab");
+            close.setTextColor(MUTED);
+            close.setBackground(rounded(Color.rgb(38, 42, 52), 14));
+            row.addView(close, new LinearLayout.LayoutParams(dp(42), dp(42)));
+            row.setOnClickListener(v -> {
+                selectTab(index);
+                dialogSafeDismissTabs();
+            });
+            close.setOnClickListener(v -> {
+                closeTabAt(index);
+                dialogSafeDismissTabs();
+            });
         }
-        names[tabs.size()] = "+ New tab";
-        new AlertDialog.Builder(this)
-            .setTitle("ASTER tabs (" + tabs.size() + "/" + MAX_TABS + ")")
-            .setItems(names, (d, which) -> {
-                if (which == tabs.size()) addTab(HOME_PAGE);
-                else selectTab(which);
-            })
-            .setNegativeButton("Close active tab", (d, w) -> closeTab())
-            .show();
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Your tabs")
+            .setView(scroll)
+            .setNegativeButton("Done", null)
+            .setPositiveButton("+ New tab", (d, which) -> addTab(HOME_PAGE))
+            .create();
+        pendingTabsDialog = dialog;
+        for (int i = 0; i < list.getChildCount(); i++) {
+            View child = list.getChildAt(i);
+            if (child instanceof LinearLayout && i > 0) {
+                // The row listeners are attached below after the dialog exists.
+            }
+        }
+        dialog.show();
+    }
+
+    private AlertDialog pendingTabsDialog;
+
+    private void dialogSafeDismissTabs() {
+        if (pendingTabsDialog != null && pendingTabsDialog.isShowing()) pendingTabsDialog.dismiss();
+        pendingTabsDialog = null;
     }
 
     private void closeTab() {
-        if (tabs.size() <= 1) {
+        closeTabAt(active);
+    }
+
+    private void closeTabAt(int index) {
+        if (index < 0 || index >= tabs.size()) return;
+        if (tabs.size() == 1) {
             current().loadUrl(getHomepage());
             return;
         }
-        WebView w = tabs.remove(active);
-        topLevelHosts.remove(w);
-        pageBlockedCounts.remove(w);
-        webContainer.removeView(w);
-        w.stopLoading();
-        w.destroy();
-        selectTab(Math.max(0, active - 1));
+        WebView closing = tabs.remove(index);
+        topLevelHosts.remove(closing);
+        pageBlockedCounts.remove(closing);
+        webContainer.removeView(closing);
+        closing.stopLoading();
+        closing.destroy();
+
+        if (index < active) active--;
+        else if (index == active) active = Math.min(index, tabs.size() - 1);
+        selectTab(active);
         saveSession();
     }
 
