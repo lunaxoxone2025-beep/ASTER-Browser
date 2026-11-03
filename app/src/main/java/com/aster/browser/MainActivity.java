@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.Context;
+import android.content.BroadcastReceiver;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -14,6 +15,8 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Environment;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -45,6 +48,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 import java.net.URLEncoder;
 import java.util.ArrayList;
@@ -64,6 +69,10 @@ public class MainActivity extends Activity {
     private static final int BACKUP_EXPORT_REQUEST = 8101;
     private static final int BACKUP_IMPORT_REQUEST = 8102;
     private static final int MAX_BACKUP_BYTES = 10 * 1024 * 1024;
+    private static final String RELEASES_API = "https://api.github.com/repos/lunaxoxone2025-beep/ASTER-Browser/releases/latest";
+    private static final String UPDATE_APK_NAME = "ASTER-Browser.apk";
+    private static final long UPDATE_CHECK_INTERVAL = 24L * 60L * 60L * 1000L;
+    private static final long UPDATE_CHECK_THROTTLE = 6L * 60L * 60L * 1000L;
 
     // Lightweight built-in domains, not a complete EasyList/uBlock filter engine.
     private static final String[] SHIELD_BLOCKED_HOSTS = {
@@ -96,6 +105,24 @@ public class MainActivity extends Activity {
     private final ConcurrentHashMap<WebView, AtomicInteger> pageBlockedCounts = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicInteger> blockedDomainCounts = new ConcurrentHashMap<>();
     private final AtomicInteger totalBlockedRequests = new AtomicInteger(0);
+    private final Handler updateHandler = new Handler(Looper.getMainLooper());
+    private long updateDownloadId = -1L;
+    private boolean updateReceiverRegistered = false;
+    private final Runnable periodicUpdateCheck = new Runnable() {
+        @Override public void run() {
+            checkForUpdates(false);
+            updateHandler.postDelayed(this, UPDATE_CHECK_INTERVAL);
+        }
+    };
+    private final BroadcastReceiver updateDownloadReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (!DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(intent.getAction())) return;
+            long completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
+            long expectedId = prefs.getLong("update_download_id", -1L);
+            if (completedId != expectedId || expectedId < 0) return;
+            openDownloadedUpdate(expectedId);
+        }
+    };
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -104,6 +131,145 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("aster", MODE_PRIVATE);
         buildUi();
         if (!restoreSession()) addTab(HOME_PAGE);
+        registerUpdateReceiver();
+        checkForUpdates(false);
+    }
+
+    private void registerUpdateReceiver() {
+        if (updateReceiverRegistered) return;
+        IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(updateDownloadReceiver, filter, Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(updateDownloadReceiver, filter);
+        }
+        updateReceiverRegistered = true;
+    }
+
+    private void checkForUpdates(boolean force) {
+        long now = System.currentTimeMillis();
+        long lastCheck = prefs.getLong("update_last_check", 0L);
+        if (!force && now - lastCheck < UPDATE_CHECK_THROTTLE) return;
+        prefs.edit().putLong("update_last_check", now).apply();
+
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) new URL(RELEASES_API).openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(15000);
+                connection.setRequestProperty("Accept", "application/vnd.github+json");
+                connection.setRequestProperty("User-Agent", "ASTER-Browser-Android");
+                if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) return;
+                String json = new String(readLimited(connection.getInputStream(), 2 * 1024 * 1024), "UTF-8");
+                JSONObject release = new JSONObject(json);
+                String tag = release.optString("tag_name", "").trim();
+                JSONArray assets = release.optJSONArray("assets");
+                String apkUrl = null;
+                if (assets != null) {
+                    for (int i = 0; i < assets.length(); i++) {
+                        JSONObject asset = assets.optJSONObject(i);
+                        if (asset != null && UPDATE_APK_NAME.equals(asset.optString("name"))) {
+                            apkUrl = asset.optString("browser_download_url", null);
+                            break;
+                        }
+                    }
+                }
+                if (apkUrl == null || !apkUrl.startsWith("https://")) return;
+                if (compareVersions(tag, "v" + BuildConfig.VERSION_NAME) <= 0) return;
+                String finalApkUrl = apkUrl;
+                runOnUiThread(() -> showUpdateAvailable(tag, finalApkUrl));
+            } catch (Exception ignored) {
+                // Update checks are best-effort and must never interrupt browsing.
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        }, "ASTER-update-check").start();
+    }
+
+    private int compareVersions(String remote, String local) {
+        String[] a = remote.replaceFirst("^[vV]", "").split("\\.");
+        String[] b = local.replaceFirst("^[vV]", "").split("\\.");
+        for (int i = 0; i < Math.max(a.length, b.length); i++) {
+            int av = i < a.length ? parseVersionPart(a[i]) : 0;
+            int bv = i < b.length ? parseVersionPart(b[i]) : 0;
+            if (av != bv) return Integer.compare(av, bv);
+        }
+        return 0;
+    }
+
+    private int parseVersionPart(String part) {
+        String digits = part.replaceAll("[^0-9].*$", "");
+        try { return Integer.parseInt(digits); }
+        catch (Exception ignored) { return 0; }
+    }
+
+    private void showUpdateAvailable(String version, String apkUrl) {
+        if (isFinishing()) return;
+        new AlertDialog.Builder(this)
+            .setTitle("ASTER " + version + " is available")
+            .setMessage("A newer version of ASTER Browser is ready. Download it now? Android will ask you to confirm the installation.")
+            .setNegativeButton("Later", null)
+            .setPositiveButton("Download update", (dialog, which) -> downloadUpdate(apkUrl))
+            .show();
+    }
+
+    private void downloadUpdate(String apkUrl) {
+        try {
+            DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            if (manager == null) throw new IllegalStateException("Download service unavailable");
+            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(apkUrl));
+            request.setTitle("ASTER Browser update");
+            request.setDescription("Downloading the latest ASTER version");
+            request.setMimeType("application/vnd.android.package-archive");
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            request.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, UPDATE_APK_NAME);
+            long id = manager.enqueue(request);
+            prefs.edit().putLong("update_download_id", id).apply();
+            Toast.makeText(this, "Downloading ASTER update…", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not download update: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void openDownloadedUpdate(long downloadId) {
+        DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+        if (manager == null) return;
+        DownloadManager.Query query = new DownloadManager.Query().setFilterById(downloadId);
+        try (android.database.Cursor cursor = manager.query(query)) {
+            if (cursor == null || !cursor.moveToFirst()) return;
+            int statusColumn = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
+            if (statusColumn < 0 || cursor.getInt(statusColumn) != DownloadManager.STATUS_SUCCESSFUL) {
+                Toast.makeText(this, "ASTER update download failed", Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+        Uri apkUri = manager.getUriForDownloadedFile(downloadId);
+        if (apkUri == null) {
+            Toast.makeText(this, "Could not open downloaded update", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Allow ASTER updates")
+                .setMessage("Enable permission to install apps from ASTER Browser, then return to install the update.")
+                .setNegativeButton("Later", null)
+                .setPositiveButton("Open settings", (d, w) -> {
+                    Intent settings = new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + getPackageName()));
+                    startActivity(settings);
+                }).show();
+            return;
+        }
+        try {
+            Intent install = new Intent(Intent.ACTION_VIEW);
+            install.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(install);
+        } catch (Exception e) {
+            Toast.makeText(this, "Android could not open the installer: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
@@ -1114,12 +1280,23 @@ public class MainActivity extends Activity {
         String[] items = {
             "Search engine: " + getSearchEngineName(),
             "Homepage: " + homepage,
-            "Restore tabs on startup: " + (prefs.getBoolean("restore_tabs", true) ? "On" : "Off")
+            "Restore tabs on startup: " + (prefs.getBoolean("restore_tabs", true) ? "On" : "Off"),
+            "Check for updates",
+            "About ASTER Browser"
         };
         new AlertDialog.Builder(this).setTitle("Browser settings").setItems(items, (d, which) -> {
             if (which == 0) chooseSearchEngine();
             else if (which == 1) editHomepage();
-            else chooseRestoreTabs();
+            else if (which == 2) chooseRestoreTabs();
+            else if (which == 3) {
+                Toast.makeText(this, "Checking for updates…", Toast.LENGTH_SHORT).show();
+                checkForUpdates(true);
+            } else if (which == 4) {
+                new AlertDialog.Builder(this).setTitle("ASTER Browser")
+                    .setMessage("Version " + BuildConfig.VERSION_NAME + "\\nAutomatic update checks are enabled. Updates always require your confirmation in Android.")
+                    .setPositiveButton("Check now", (dialog, button) -> checkForUpdates(true))
+                    .setNegativeButton("Close", null).show();
+            }
         }).show();
     }
 
@@ -1312,6 +1489,9 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        checkForUpdates(false);
+        updateHandler.removeCallbacks(periodicUpdateCheck);
+        updateHandler.postDelayed(periodicUpdateCheck, UPDATE_CHECK_INTERVAL);
         for (int i = 0; i < tabs.size(); i++) {
             if (i == active) tabs.get(i).onResume();
             else tabs.get(i).onPause();
@@ -1324,6 +1504,11 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        updateHandler.removeCallbacks(periodicUpdateCheck);
+        if (updateReceiverRegistered) {
+            try { unregisterReceiver(updateDownloadReceiver); } catch (Exception ignored) {}
+            updateReceiverRegistered = false;
+        }
         saveSession();
         for (WebView w : tabs) {
             w.stopLoading();
