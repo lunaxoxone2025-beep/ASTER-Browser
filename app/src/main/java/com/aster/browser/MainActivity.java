@@ -1029,31 +1029,67 @@ public class MainActivity extends Activity {
         saveSession();
     }
 
+    private void addMenuTile(LinearLayout row, String icon, String label, AlertDialog dialog, Runnable action) {
+        TextView tile = button(icon + "\\n" + label, 13);
+        tile.setTypeface(Typeface.DEFAULT_BOLD);
+        tile.setGravity(Gravity.CENTER);
+        tile.setMinHeight(dp(76));
+        tile.setBackground(rounded(PANEL, 17));
+        tile.setContentDescription(label);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(76), 1);
+        params.setMargins(dp(4), dp(4), dp(4), dp(4));
+        row.addView(tile, params);
+        tile.setOnClickListener(v -> {
+            dialog.dismiss();
+            action.run();
+        });
+    }
+
     private void showMenu() {
-        String[] items = {
-            "Add bookmark", "Bookmarks", "History", "Find in page",
-            "Share page", "Downloads", "Clear browsing data", "Settings", "Backup & restore", "New tab"
-        };
-        new AlertDialog.Builder(this).setTitle("ASTER menu").setItems(items, (d, which) -> {
-            switch (which) {
-                case 0: addBookmark(); break;
-                case 1: showSavedList("Bookmarks", "bookmarks"); break;
-                case 2: showSavedList("History", "history"); break;
-                case 3: findInPage(); break;
-                case 4: sharePage(); break;
-                case 5:
-                    try {
-                        startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS));
-                    } catch (Exception e) {
-                        Toast.makeText(this, "Downloads are managed by Android", Toast.LENGTH_SHORT).show();
-                    }
-                    break;
-                case 6: confirmClearBrowsingData(); break;
-                case 7: showSettings(); break;
-                case 8: showBackupRestore(); break;
-                case 9: addTab(HOME_PAGE); break;
-            }
-        }).show();
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(12), dp(12), dp(12), dp(12));
+        panel.setBackgroundColor(BG);
+
+        TextView heading = panelText("ASTER  /  BROWSER MENU", 17, TEXT);
+        heading.setTypeface(Typeface.DEFAULT_BOLD);
+        heading.setPadding(dp(8), dp(8), dp(8), dp(12));
+        panel.addView(heading);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setView(panel)
+            .setNegativeButton("Close", null)
+            .create();
+
+        LinearLayout row1 = new LinearLayout(this);
+        addMenuTile(row1, "★", "Bookmarks", dialog, () -> showSavedList("Bookmarks", "bookmarks"));
+        addMenuTile(row1, "◷", "History", dialog, () -> showSavedList("History", "history"));
+        panel.addView(row1);
+
+        LinearLayout row2 = new LinearLayout(this);
+        addMenuTile(row2, "⇩", "Downloads", dialog, () -> {
+            try { startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)); }
+            catch (Exception e) { Toast.makeText(this, "Downloads are managed by Android", Toast.LENGTH_SHORT).show(); }
+        });
+        addMenuTile(row2, "⛨", "Ad blocker", dialog, () -> showPrivacyPanel());
+        panel.addView(row2);
+
+        LinearLayout row3 = new LinearLayout(this);
+        addMenuTile(row3, "⌕", "Find in page", dialog, () -> findInPage());
+        addMenuTile(row3, "↗", "Share page", dialog, () -> sharePage());
+        panel.addView(row3);
+
+        LinearLayout row4 = new LinearLayout(this);
+        addMenuTile(row4, "⚙", "Settings", dialog, () -> showSettings());
+        addMenuTile(row4, "⇄", "Backup & restore", dialog, () -> showBackupRestore());
+        panel.addView(row4);
+
+        LinearLayout row5 = new LinearLayout(this);
+        addMenuTile(row5, "＋", "New tab", dialog, () -> addTab(HOME_PAGE));
+        addMenuTile(row5, "⌫", "Clear browsing data", dialog, () -> confirmClearBrowsingData());
+        panel.addView(row5);
+
+        dialog.show();
     }
 
     private void addBookmark() {
