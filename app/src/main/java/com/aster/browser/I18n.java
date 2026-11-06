@@ -465,6 +465,22 @@ final class I18n {
         es("SEE ALL", "VER TODO");
         es("Epic, Steam, Xbox & gaming news", "Epic, Steam, Xbox y noticias gaming");
         es("Open Arcade", "Abrir Arcade");
+        // ---- alerts & crash reports
+        es("Free game alerts", "Avisos de juegos gratis");
+        es("Get a notification when a new free game appears on the stores you follow", "Recibe una notificación cuando aparezca un juego gratis nuevo en las tiendas que sigues");
+        es("Stores to watch", "Tiendas a vigilar");
+        es("Mobile (Android / iOS)", "Móvil (Android / iOS)");
+        es("None", "Ninguna");
+        es("You'll be notified about new free games", "Te avisaremos de los juegos gratis nuevos");
+        es("Notifications are blocked — allow them in Android settings to get alerts", "Las notificaciones están bloqueadas: actívalas en los ajustes de Android para recibir avisos");
+        es("New free games on the stores you follow", "Juegos gratis nuevos en las tiendas que sigues");
+        es("Free on %s", "Gratis en %s");
+        es("was %s", "antes %s");
+        es("%d more free games", "%d juegos gratis más");
+        es("ASTER closed unexpectedly", "ASTER se cerró inesperadamente");
+        es("A report was saved on this device. Copy or share it so the problem can be fixed. Nothing has been sent anywhere.",
+            "Se guardó un informe en este dispositivo. Cópialo o compártelo para que se pueda arreglar el problema. No se ha enviado nada a ningún sitio.");
+        es("Copy report", "Copiar informe");
         // ---- start page
         es("You are in a private window.", "Estás en una ventana privada.");
         es("ASTER won't save your history, session or site data from this window. Cookies and storage live in a separate, isolated profile and are wiped when you close it. Halo still blocks ads and trackers.",

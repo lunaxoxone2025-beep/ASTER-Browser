@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Versión Android actual: **1.4.0**.
+Versión Android actual: **1.5.0**.
 
 ASTER es un navegador Android original y centrado en la privacidad, con una identidad inspirada en el cielo nocturno: bloqueo integrado de anuncios y rastreadores (**ASTER Halo**), gestión de memoria (**ASTER Core**), una página de inicio viva con juegos gratis (**Arcade**), el **botón Órbita** y temas propios, incluido un aspecto **Liquid Glass** completo.
 
@@ -21,7 +21,7 @@ ASTER es un navegador Android original y centrado en la privacidad, con una iden
 Uso de memoria en directo, **ahorro de memoria** (duerme las pestañas menos usadas), vista de pestañas abiertas, ahorro de datos y limpieza de caché.
 
 ### 🕹 Arcade
-Centro gaming: juegos gratis de la semana en Epic Games Store (y los próximos), regalos para Steam, Xbox, PlayStation, GOG, móvil, Switch y DLC (GamerPower), y noticias de GameSpot, PC Gamer, Xbox Wire, PlayStation Blog y Vandal.
+Centro gaming: juegos gratis de la semana en Epic Games Store (y los próximos), regalos para Steam, Xbox, PlayStation, GOG, móvil, Switch y DLC (GamerPower), y noticias de GameSpot, PC Gamer, Xbox Wire, PlayStation Blog y Vandal. Los **avisos de juegos gratis** opcionales te notifican cuando aparece un juego gratis nuevo en las tiendas que sigues.
 
 ### 🧭 Navegación
 - **Menú integrado** con acciones rápidas, tarjeta de la página, interruptores rápidos y cuadrícula; los paneles se cierran deslizando hacia abajo.

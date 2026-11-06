@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0] - 2026-11-06
+Free game alerts and crash reports.
+
+### Added
+- **Free game alerts** (Settings → Arcade): a background check every few hours, only with a network connection, notifies you of new free games on the stores you choose (Epic Games Store, Steam, Xbox, PlayStation, GOG, mobile). Notifications show the game art and open the store page; the first check only records current offers so you aren't flooded with old ones. Survives reboots.
+- **Crash reports**: if ASTER closes unexpectedly, the next start shows the saved report with Copy and Share buttons. Nothing is sent automatically.
+
 ## [1.4.0] - 2026-11-06
 Arcade grows into a full gaming hub.
 

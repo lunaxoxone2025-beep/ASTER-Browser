@@ -115,6 +115,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private static final int REQ_DOWNLOAD_PERM = 701;
     private static final int REQ_MEDIA_PERM = 8201;
     private static final int REQ_LOCATION_PERM = 8202;
+    private static final int REQ_NOTIFY = 8203;
     static final String REWARDS_URL = "https://rewards.bing.com";
     private static final String[] MICROSOFT_DOMAINS = {"bing.com", "live.com", "microsoft.com", "microsoftonline.com",
         "xbox.com", "msn.com", "office.com", "live.net", "msftauth.net", "msauth.net", "gfx.ms", "microsoftrewards.com"};
@@ -183,6 +184,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        CrashReporter.install(this);
         incognito = isPrivateWindow();
         prefs = incognito ? privatePrefs() : getSharedPreferences("aster", MODE_PRIVATE);
         I18n.init(prefs.getString("language", "auto"));
@@ -212,7 +214,51 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             if (shields.needsUpdate()) shields.updateAsync((ok, rules) -> ui.post(this::refreshShieldChrome));
             refreshGxCorner(false);
             setupRewardsOnce();
+            if (prefs.getBoolean("notify_free_games", false)) FreeGamesJob.schedule(this, true);
+            ui.postDelayed(this::showCrashReportIfAny, 600);
         }
+        if (getIntent() != null && FreeGamesJob.ACTION_OPEN_ARCADE.equals(getIntent().getAction())) ui.postDelayed(this::showArcade, 300);
+    }
+
+    /** After a crash, offers to copy or share the saved report so the problem can be fixed. */
+    private void showCrashReportIfAny() {
+        final String report = CrashReporter.pending(this);
+        if (report == null) return;
+        CrashReporter.clear(this);
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(18), dp(6), dp(18), dp(18));
+        body.addView(bold("ASTER closed unexpectedly", 18, theme.text));
+        TextView msg = text("A report was saved on this device. Copy or share it so the problem can be fixed. Nothing has been sent anywhere.", 13, theme.muted);
+        msg.setPadding(0, dp(6), 0, dp(10));
+        body.addView(msg);
+        TextView preview = text(report.length() > 900 ? report.substring(0, 900) + "…" : report, 10.5f, theme.text);
+        preview.setTypeface(Typeface.MONOSPACE);
+        preview.setPadding(dp(12), dp(10), dp(12), dp(10));
+        preview.setBackground(shape(theme.surface, 14, 0));
+        preview.setTextIsSelectable(true);
+        body.addView(preview);
+        final Sheet[] d = new Sheet[1];
+        LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-1, -2);
+        gap.topMargin = dp(10);
+        LinearLayout actions = new LinearLayout(this);
+        body.addView(actions, gap);
+        TextView copyBtn = bold("📋  " + I18n.t("Copy report"), 14, Color.WHITE);
+        copyBtn.setGravity(Gravity.CENTER);
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{theme.accent, theme.accent2});
+        g.setCornerRadius(dp(22));
+        copyBtn.setBackground(g);
+        onTap(copyBtn, () -> { copy(report); d[0].dismiss(); });
+        actions.addView(copyBtn, new LinearLayout.LayoutParams(0, dp(46), 1));
+        TextView shareBtn = bold("↗  " + I18n.t("Share"), 14, theme.text);
+        shareBtn.setGravity(Gravity.CENTER);
+        shareBtn.setBackground(pressable(theme.surface, 22, 0));
+        onTap(shareBtn, () -> { share(report); d[0].dismiss(); });
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(dp(120), dp(46));
+        sl.leftMargin = dp(10);
+        actions.addView(shareBtn, sl);
+        d[0] = sheet(body);
+        d[0].show();
     }
 
     /** One-time Microsoft Rewards setup: shortcut on the start page and an offer to switch to Bing. */
@@ -296,6 +342,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if (FreeGamesJob.ACTION_OPEN_ARCADE.equals(intent.getAction())) { showArcade(); return; }
         String url = incomingUrl(intent);
         if (url != null) openInNewTab(url, false);
     }
@@ -3146,6 +3193,16 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         switchRow(b, "Background media playback", "Keep audio and video playing when ASTER is in the background", "background_play", false, null);
         switchRow(b, "Picture-in-picture", "Full-screen videos keep playing in a small window when you leave ASTER", "pip", true, null);
 
+        sectionTitle(b, "Arcade");
+        switchRow(b, "Free game alerts", "Get a notification when a new free game appears on the stores you follow", "notify_free_games", false, () -> {
+            boolean on = prefs.getBoolean("notify_free_games", false);
+            if (on && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
+            }
+            enableFreeGameAlerts(on);
+        });
+        rowCard(b, "Stores to watch", storesSummary(), () -> { p.dismiss(); chooseAlertStores(); });
+
         sectionTitle(b, "YouTube & Rewards");
         switchRow(b, "Remove YouTube ads", "Experimental: strips ad data from the player and blocks ad endpoints", "yt_adblock", true, null);
         rowCard(b, "Microsoft Rewards", "Open your Rewards dashboard (search with Bing while signed in to earn points)", () -> { p.dismiss(); openRewards(); });
@@ -3175,6 +3232,40 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         rowCard(b, "Check for updates", "Looks for new releases on GitHub", () -> { if (updater != null) updater.check(true); });
         rowCard(b, "Source code", Updater.REPO_URL.replace("https://", ""), () -> { p.dismiss(); openInNewTab(Updater.REPO_URL, false); });
         p.show();
+    }
+
+    private void enableFreeGameAlerts(boolean on) {
+        FreeGamesJob.schedule(this, on);
+        if (!on) return;
+        // Record what is already free now, so only genuinely new offers trigger alerts.
+        final Context app = getApplicationContext();
+        new Thread(() -> FreeGamesJob.check(app, false), "ASTER-free-games-baseline").start();
+        toast("You'll be notified about new free games");
+    }
+
+    private String storesSummary() {
+        java.util.Set<String> chosen = prefs.getStringSet("notify_stores", FreeGamesJob.defaultStores());
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < FreeGamesJob.STORE_IDS.length; i++) {
+            if (!chosen.contains(FreeGamesJob.STORE_IDS[i])) continue;
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(I18n.t(FreeGamesJob.STORE_NAMES[i]));
+        }
+        return sb.length() == 0 ? I18n.t("None") : sb.toString();
+    }
+
+    private void chooseAlertStores() {
+        java.util.Set<String> chosen = prefs.getStringSet("notify_stores", FreeGamesJob.defaultStores());
+        final boolean[] checked = new boolean[FreeGamesJob.STORE_IDS.length];
+        for (int i = 0; i < checked.length; i++) checked[i] = chosen.contains(FreeGamesJob.STORE_IDS[i]);
+        new I18n.Builder(this).setTitle("Stores to watch")
+            .setMultiChoiceItems(FreeGamesJob.STORE_NAMES, checked, (d, w, on) -> checked[w] = on)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save", (d, w) -> {
+                java.util.Set<String> out = new java.util.LinkedHashSet<>();
+                for (int i = 0; i < checked.length; i++) if (checked[i]) out.add(FreeGamesJob.STORE_IDS[i]);
+                prefs.edit().putStringSet("notify_stores", out).apply();
+            }).show();
     }
 
     private String translationName(String code) {
@@ -3900,6 +3991,9 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         super.onRequestPermissionsResult(code, permissions, results);
         if (code == REQ_MEDIA_PERM) grantMedia();
         else if (code == REQ_LOCATION_PERM) finishLocation(hasLocation());
+        else if (code == REQ_NOTIFY) {
+            if (results.length == 0 || results[0] != PackageManager.PERMISSION_GRANTED) toast("Notifications are blocked — allow them in Android settings to get alerts");
+        }
         else if (code == REQ_DOWNLOAD_PERM) {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startDownload();
             else { toast("Storage permission is required on this Android version"); dlUrl = null; }
