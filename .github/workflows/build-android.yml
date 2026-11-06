@@ -68,6 +68,7 @@ jobs:
             echo "::notice::Persistent signing is not configured. Building a debug APK for testing only; no install-over update will be published."
           fi
       - name: Set up Android SDK
+        id: sdk
         uses: android-actions/setup-android@v3
       - name: Build signed release APK
         id: signed_build
@@ -85,12 +86,22 @@ jobs:
           fi
           gradle :app:assembleDebug --stacktrace 2>&1 | tee -a build.log
       - name: Report build errors
-        if: failure() || steps.signed_build.outcome == 'failure'
+        if: always() && (failure() || steps.signed_build.outcome == 'failure')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STEPS_JSON: ${{ toJSON(steps) }}
         run: |
           touch build.log
-          grep -E "error:|e: |What went wrong|FAILED|Exception|> " build.log | head -40 | while IFS= read -r line; do
+          {
+            echo "===== step outcomes ====="
+            echo "$STEPS_JSON"
+            echo "===== environment ====="
+            echo "ANDROID_HOME=$ANDROID_HOME ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+            java -version 2>&1 || true
+            gradle --version 2>&1 | head -20 || true
+            ls -la app/build/outputs/apk/*/ 2>&1 || true
+          } >> build.log
+          { grep -E "error:|e: |What went wrong|FAILED|Exception" build.log || true; } | head -40 | while IFS= read -r line; do
             echo "::error::$line"
           done
           mkdir -p "$RUNNER_TEMP/ci-logs" && cp build.log "$RUNNER_TEMP/ci-logs/build.log"
