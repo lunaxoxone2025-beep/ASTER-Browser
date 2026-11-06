@@ -7,9 +7,10 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
 
     <application
         android:allowBackup="false"
@@ -19,16 +20,19 @@
         android:supportsRtl="true"
         android:theme="@style/ASTERTheme"
         android:usesCleartextTraffic="false"
+        android:hardwareAccelerated="true"
+        android:largeHeap="true"
         android:resizeableActivity="true">
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden|screenLayout"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden|keyboard|screenLayout|uiMode|density|navigation"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.APP_BROWSER" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -37,12 +41,25 @@
                 <data android:scheme="http" />
                 <data android:scheme="https" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.WEB_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
         <activity
             android:name=".PrivateActivity"
+            android:label="ASTER Private"
             android:process=":private"
             android:exported="false"
-            android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden|screenLayout"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.aster.browser.private"
+            android:excludeFromRecents="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden|keyboard|screenLayout|uiMode|density|navigation"
             android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>

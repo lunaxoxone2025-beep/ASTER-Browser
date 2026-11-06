@@ -1,53 +1,45 @@
 # ASTER Browser
 
-Versión Android actual: **0.15.1**.
+Versión Android actual: **1.0.0**, reconstruida desde cero.
 
-ASTER es un navegador para Android en desarrollo, con pestañas, marcadores, historial, descargas y controles de privacidad. La nueva dirección visual utiliza tonos oscuros violetas, una página de inicio renovada y controles inspirados de forma general en navegadores modernos como Brave y Opera GX, manteniendo una identidad propia.
+ASTER es un navegador para Android centrado en la privacidad y con estética gaming. La versión 1.0 reúne lo mejor de **Brave** (Shields, bloqueo integrado, estadísticas de privacidad) y de **Opera GX** (temas GX, Fast Action Button, GX Control, GX Corner) manteniendo una identidad propia.
 
-## ASTER Shield 0.15.0\n\nLa protección ahora combina varias listas de filtros y oculta algunos elementos publicitarios de las páginas, incluidos ciertos anuncios superpuestos de YouTube. Las listas se actualizan cada 24 horas o manualmente desde el panel Shield. Debido a las limitaciones de Android WebView y a los anuncios de vídeo servidos desde los mismos dominios que el contenido legítimo, no se garantiza el bloqueo de todos los anuncios de YouTube.\n\n## Motor y plataforma
+> ASTER usa **Android System WebView** para mostrar las páginas. No es un fork de Chromium: no admite extensiones y algunas funciones de motor (uBlock Origin completo, Tor, sincronización) no están disponibles.
 
-ASTER utiliza actualmente Android System WebView. No es un navegador Chromium independiente y, por tanto, algunas funciones avanzadas de otros navegadores no están disponibles.
+## Novedades principales
 
-## ASTER Shield — bloqueo de anuncios y rastreadores
+### ⛨ ASTER Shields (estilo Brave)
+- Bloqueo de red con **EasyList, EasyPrivacy, AdGuard (Base, Tracking, Mobile) y la lista de Peter Lowe**, actualizado cada 24 h. Las reglas se guardan en archivos.
+- **Filtrado cosmético**: reglas `##selector` genéricas y por sitio que ocultan huecos publicitarios y banners.
+- Modos **Estándar / Agresivo**.
+- **Panel por sitio**: Shields activados/desactivados, bloqueo de fingerprinting, ocultar anuncios, bloquear scripts y lista de dominios bloqueados.
+- **Protección contra fingerprinting**, señales Global Privacy Control y DNT, **bloqueo de pop-ups**, solo HTTPS, cookies de terceros bloqueadas.
+- YouTube: oculta la interfaz de anuncios, pulsa «Saltar» y adelanta anuncios de vídeo cuando se cuelan (sin garantía).
+- Contadores en la página de inicio: **anuncios y rastreadores bloqueados, datos ahorrados y tiempo ahorrado**.
 
-- Importa reglas de red basadas en dominios desde EasyList, EasyPrivacy, AdGuard Base, AdGuard Tracking Protection, AdGuard Mobile Ads y la lista de servidores publicitarios de Peter Lowe.
-- Mantiene las reglas en caché y actualiza las listas cada 24 horas cuando hay conexión.
-- Permite actualizar los filtros manualmente desde el panel Shield.
-- Aplica limpieza visual experimental en YouTube y pulsa controles de omitir anuncios cuando aparecen.
-- Oculta algunos espacios publicitarios y superposiciones de anuncios de YouTube, e intenta pulsar automáticamente el botón visible «Saltar anuncio».
-- Incluye protección global, excepciones por sitio y contadores de solicitudes bloqueadas.
+### ⚡ Funciones GX (estilo Opera GX)
+- **Temas**: ASTER Night, Shields Dark, GX Classic, GX Purple Haze, GX Hackerman, GX Ultraviolet, GX Frutti di Mare, GX Ice Cold y Liquid Glass.
+- **Fast Action Button**: botón flotante opcional que despliega acciones rápidas. Desliza ← / → para atrás/adelante, ↑ para pestañas y mantén pulsado para una pestaña nueva.
+- **GX Control**: uso de RAM en directo, **limitador de RAM** (duerme las pestañas menos usadas), **Hot Tabs Killer**, ahorro de datos y limpieza de caché.
+- **GX Corner**: juegos gratis en la página de inicio (API de GamerPower).
+- **Sonidos y vibración GX** opcionales.
+- **Fondos animados**: Nebula, Synthwave, Aurora, Lluvia de código y Minimal.
 
-**Limitación importante:** Android WebView no ofrece los mismos controles de red y filtros cosméticos que un motor de navegador dedicado. YouTube puede servir anuncios de vídeo desde la misma infraestructura que el vídeo, por lo que no se pueden bloquear todos sin arriesgar la reproducción. Esta versión mejora el bloqueo, pero no equivale a uBlock Origin ni a Brave Shields.
+### 🧭 Navegación
+- Hasta 100 pestañas con **pestañas dormidas**, selector visual con miniaturas y deslizar para cerrar.
+- Barra de direcciones con **sugerencias**, coincidencias de historial y marcadores y «pegar e ir»; puede ir **arriba o abajo**.
+- **Vídeo a pantalla completa**, **menú al mantener pulsado** enlaces e imágenes, abrir en pestaña nueva, en segundo plano o privada.
+- **Deslizar para recargar**, **buscar en la página**, **modo lectura**, **modo noche para webs**, **versión de escritorio** por pestaña, **traducir**, **añadir a la pantalla de inicio**, **búsqueda por voz**.
+- Gestores de marcadores, historial y descargas; **marcación rápida** editable.
+- Buscadores: Brave Search (predeterminado en instalaciones nuevas), DuckDuckGo, Google, Bing, Startpage, Ecosia y Qwant.
+- **Reproducción en segundo plano** opcional.
 
-## Página de inicio y pestañas
+### 👁 Ventanas privadas
+El navegador completo en un proceso separado con su propio perfil de WebView (Android 9+). No guarda historial, sesiones ni marcadores; los datos de los sitios se borran al cerrar la ventana.
 
-- Personaliza la página de inicio mostrando u ocultando la marca ASTER, los accesos rápidos y los marcadores.
-- Elige entre cuatro fondos: Violet, Midnight, Ocean y Crimson.
-- El selector de pestañas ahora utiliza tarjetas en dos columnas, con título, dominio, indicador de pestaña activa, botón para cerrar y acceso rápido a una pestaña nueva.
-- ASTER Shield sigue disponible directamente desde la barra superior.
-
-## Compatibilidad y funciones de navegación
-
-ASTER adapta las barras y la navegación a móviles Android y a ventanas amplias o redimensionables de tablets, plegables y otros dispositivos Android compatibles. También incorpora:
-- Modo escritorio para solicitar las versiones de escritorio de las páginas.
-- Modo lectura para simplificar artículos.
-- Traducción de páginas mediante Google Translate, con idioma de destino configurable.
-- Tamaño de texto ajustable.
-- Subida de archivos desde el selector de archivos de Android.
-- Apertura de enlaces HTTP/HTTPS de otras aplicaciones cuando ASTER está seleccionado como navegador.
-- Atajos de teclado: Ctrl+L (barra de direcciones), Ctrl+T (nueva pestaña), Ctrl+W (cerrar pestaña), Ctrl+R (recargar), Ctrl+Tab / Ctrl+Shift+Tab (cambiar pestaña) y Esc (salir del modo lectura).
-- Copias de seguridad que ahora incluyen estas nuevas preferencias.
-
-ASTER sigue siendo una aplicación Android; esto no la convierte en un navegador nativo para iOS, Windows o macOS. El modo escritorio continúa utilizando Android System WebView. La traducción necesita conexión a internet y el modo lectura puede no interpretar perfectamente algunas páginas complejas.
-
-## Copias de seguridad
-
-En el menú del navegador, abre **Backup & restore** para exportar o importar marcadores, historial, ajustes y pestañas abiertas en un archivo JSON. No incluye cookies, contraseñas ni caché.
-
-## Actualizaciones
-
-ASTER comprueba si hay nuevas versiones en GitHub Releases y puede descargar el APK para abrir el instalador de Android. Android siempre exige confirmación. Para actualizar una instalación existente, todas las versiones deben estar firmadas con la misma clave permanente. Mientras no esté configurada, los APK de depuración son solo para pruebas y podrían no instalarse encima de una versión anterior.
+### 💾 Copias de seguridad
+Exporta marcadores, historial, marcación rápida, Shields por sitio, ajustes y pestañas a un archivo JSON. También importa copias de la versión 0.x. Nunca incluye cookies ni contraseñas.
 
 ## Compilación
 
-El proyecto Android utiliza Gradle y Android Gradle Plugin. GitHub Actions se encarga de compilar el APK.
+Java + framework de Android, sin dependencias externas. GitHub Actions compila el APK; los commits con `[release]` publican una Release con `ASTER-Browser.apk`.

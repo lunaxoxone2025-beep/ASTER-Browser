@@ -2,36 +2,62 @@ package com.aster.browser;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.app.DownloadManager;
+import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
-import android.content.BroadcastReceiver;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.res.Configuration;
 import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ShortcutInfo;
+import android.content.pm.ShortcutManager;
+import android.content.res.ColorStateList;
+import android.content.res.Configuration;
+import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Icon;
+import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
+import android.net.http.SslError;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Debug;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Environment;
+import android.os.Message;
+import android.speech.RecognizerIntent;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.SslErrorHandler;
-import android.net.http.SslError;
-import android.webkit.DownloadListener;
 import android.webkit.URLUtil;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -39,2269 +65,3122 @@ import android.webkit.WebSettings;
 import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.webkit.ValueCallback;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.json.JSONTokener;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashSet;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MainActivity extends Activity {
-    private static final int MAX_TABS = 8;
-    private static final String HOME_PAGE = "aster://start";
-    private static final int DOWNLOAD_PERMISSION_REQUEST = 701;
-    private static final int BACKUP_EXPORT_REQUEST = 8101;
-    private static final int BACKUP_IMPORT_REQUEST = 8102;
-    private static final int FILE_CHOOSER_REQUEST = 8103;
-    private static final int MAX_BACKUP_BYTES = 10 * 1024 * 1024;
-    private static final String RELEASES_API = "https://api.github.com/repos/lunaxoxone2025-beep/ASTER-Browser/releases/latest";
-    private static final String UPDATE_APK_NAME = "ASTER-Browser.apk";
-    private static final long UPDATE_CHECK_INTERVAL = 24L * 60L * 60L * 1000L;
-    private static final long UPDATE_CHECK_THROTTLE = 6L * 60L * 60L * 1000L;
+/**
+ * ASTER Browser 1.0 — a privacy-first, GX-styled Android browser built on Android System WebView.
+ */
+public class MainActivity extends Activity implements AsterWebView.Listener {
+    static final String START = StartPage.BASE_URL;
+    private static final int MAX_TABS = 100;
+    private static final int REQ_FILE = 8103;
+    private static final int REQ_EXPORT = 8101;
+    private static final int REQ_IMPORT = 8102;
+    private static final int REQ_VOICE = 8104;
+    private static final int REQ_DOWNLOAD_PERM = 701;
+    private static final int REQ_MEDIA_PERM = 8201;
+    private static final int REQ_LOCATION_PERM = 8202;
+    private static final String GX_CORNER_API = "https://www.gamerpower.com/api/giveaways?type=game&sort-by=popularity";
 
-    // Built-in fallback domains. Downloaded network filters provide broader coverage.
-    private static final String[] SHIELD_BLOCKED_HOSTS = {
-        "doubleclick.net", "googlesyndication.com", "googleadservices.com",
-        "adservice.google.com", "adnxs.com", "adsrvr.org", "adform.net",
-        "taboola.com", "outbrain.com", "criteo.com", "rubiconproject.com",
-        "pubmatic.com", "openx.net", "casalemedia.com", "quantserve.com",
-        "scorecardresearch.com", "google-analytics.com", "analytics.google.com",
-        "connect.facebook.net", "pixel.facebook.com", "analytics.tiktok.com",
-        "bat.bing.com", "clarity.ms", "hotjar.com", "segment.io",
-        "cdn.segment.com", "api.segment.io", "mixpanel.com", "amplitude.com"
-    };
+    // ------------------------------------------------------------------ state
+    SharedPreferences prefs;
+    Theme theme;
+    Store store;
+    ShieldEngine shields;
+    private Updater updater;
+    private GxSounds sounds;
+    boolean incognito;
+    private final Handler ui = new Handler(Looper.getMainLooper());
+    private final List<Tab> tabs = new ArrayList<>();
+    private int active = -1;
 
-    private int BG = Color.rgb(13, 11, 18);
-    private int PANEL = Color.rgb(30, 24, 39);
-    private int TEXT = Color.rgb(241, 244, 250);
-    private int MUTED = Color.rgb(174, 163, 190);
-    private int ACCENT = Color.rgb(194, 112, 255);
-
-    private LinearLayout root, toolbar, bottomBar;
-    private FrameLayout webContainer;
+    // ------------------------------------------------------------------ views
+    private LinearLayout content;
+    private LinearLayout toolbar;
+    private LinearLayout bottomBar;
+    private FrameLayout webArea;
     private EditText address;
-    private TextView tabCount;
-    private ProgressBar progressBar;
-    private String pendingDownloadUrl, pendingDownloadUserAgent, pendingDownloadMime, pendingDownloadDisposition;
-    private final List<WebView> tabs = new ArrayList<>();
-    private int active = 0;
-    private SharedPreferences prefs;
-    private AdBlockEngine adBlockEngine;
-    private AlertDialog pendingTabsDialog;
-    private ValueCallback<Uri[]> filePathCallback;
-    private static final int SITE_MEDIA_PERMISSION_REQUEST = 8201;
-    private static final int SITE_LOCATION_PERMISSION_REQUEST = 8202;
-    private PermissionRequest pendingMediaPermissionRequest;
-    private String pendingMediaPermissionOrigin;
-    private String[] pendingMediaPermissionResources;
-    private GeolocationPermissions.Callback pendingLocationCallback;
-    private String pendingLocationOrigin;
-    private final Set<WebView> readerModeTabs = Collections.newSetFromMap(new ConcurrentHashMap<WebView, Boolean>());
-    private final Map<WebView, String> topLevelHosts = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<WebView, AtomicInteger> pageBlockedCounts = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, AtomicInteger> blockedDomainCounts = new ConcurrentHashMap<>();
-    private final AtomicInteger totalBlockedRequests = new AtomicInteger(0);
-    private final Handler updateHandler = new Handler(Looper.getMainLooper());
-    private long updateDownloadId = -1L;
-    private boolean updateReceiverRegistered = false;
-    private final Runnable periodicUpdateCheck = new Runnable() {
-        @Override public void run() {
-            checkForUpdates(false);
-            updateHandler.postDelayed(this, UPDATE_CHECK_INTERVAL);
-        }
-    };
-    private final BroadcastReceiver updateDownloadReceiver = new BroadcastReceiver() {
-        @Override public void onReceive(Context context, Intent intent) {
-            if (!DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(intent.getAction())) return;
-            long completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
-            long expectedId = prefs.getLong("update_download_id", -1L);
-            if (completedId != expectedId || expectedId < 0) return;
-            openDownloadedUpdate(expectedId);
-        }
-    };
+    private TextView shieldIcon;
+    private TextView shieldBadge;
+    private TextView reloadBtn;
+    private TextView tabsTop;
+    private TextView tabsBottom;
+    private TextView backBtn;
+    private TextView forwardBtn;
+    private TextView newTabBtn;
+    private TextView menuBtn;
+    private ProgressBar progress;
+    private ScrollView suggestScroll;
+    private LinearLayout suggestBox;
+    private LinearLayout findBar;
+    private EditText findInput;
+    private TextView findCount;
+    private TextView pullIndicator;
+    private FabMenu fab;
+    private View customView;
+    private WebChromeClient.CustomViewCallback customCallback;
+    private int orientationBeforeFullscreen = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 
-    @Override public void onCreate(Bundle state) {
+    // ------------------------------------------------------------------ pending requests
+    private ValueCallback<Uri[]> fileCallback;
+    private String dlUrl, dlAgent, dlDisposition, dlMime;
+    private PermissionRequest pendingMedia;
+    private String pendingMediaOrigin;
+    private String[] pendingMediaResources;
+    private GeolocationPermissions.Callback pendingGeo;
+    private String pendingGeoOrigin;
+    private final AtomicBoolean badgePending = new AtomicBoolean(false);
+    private int suggestSeq = 0;
+    private final int fpSeed = (int) (Math.random() * 100000);
+
+    /** Overridden by {@link PrivateActivity}. */
+    protected boolean isPrivateWindow() { return false; }
+
+    // ================================================================== lifecycle
+
+    @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        prefs = getSharedPreferences("aster", MODE_PRIVATE);
-        configureThemeColors();
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
-        adBlockEngine = new AdBlockEngine(this);
+        incognito = isPrivateWindow();
+        prefs = incognito ? privatePrefs() : getSharedPreferences("aster", MODE_PRIVATE);
+        if (incognito && Build.VERSION.SDK_INT < 28) {
+            new AlertDialog.Builder(this).setTitle("Private browsing unavailable")
+                .setMessage("An isolated private profile requires Android 9 or newer.")
+                .setPositiveButton("Close", (d, w) -> finish()).setCancelable(false).show();
+            return;
+        }
+        migratePrefs();
+        theme = Theme.byId(prefs.getString("ui_theme", "aster"));
+        store = new Store(this, incognito);
+        shields = new ShieldEngine(this, prefs);
+        if (prefs.getBoolean("gx_sounds", true)) sounds = new GxSounds();
         buildUi();
-        boolean restored = restoreSession();
-        String incomingUrl = getIntent() == null ? null : getIntent().getDataString();
-        if (isBackupWebUrl(incomingUrl)) addTab(incomingUrl);
-        else if (!restored) addTab(HOME_PAGE);
-        registerUpdateReceiver();
-        checkForUpdates(false);
-        if (adBlockEngine.needsUpdate()) adBlockEngine.updateAsync(null);
+
+        String incoming = incomingUrl(getIntent());
+        boolean restored = !incognito && prefs.getBoolean("restore_tabs", true) && restoreSession();
+        if (incoming != null) openInNewTab(incoming, false);
+        else if (!restored) openInNewTab(null, false);
+
+        if (!incognito) {
+            updater = new Updater(this, prefs);
+            updater.register();
+            updater.check(false);
+            if (shields.needsUpdate()) shields.updateAsync((ok, rules) -> ui.post(this::refreshShieldChrome));
+            refreshGxCorner(false);
+        }
+    }
+
+    /**
+     * Private windows run in their own process. They get a throw-away copy of the settings so that
+     * nothing changed there can overwrite the normal window's preferences file.
+     */
+    @SuppressWarnings("unchecked")
+    private SharedPreferences privatePrefs() {
+        SharedPreferences main = getSharedPreferences("aster", MODE_PRIVATE);
+        SharedPreferences p = getSharedPreferences("aster_private", MODE_PRIVATE);
+        SharedPreferences.Editor e = p.edit().clear();
+        for (Map.Entry<String, ?> entry : main.getAll().entrySet()) {
+            Object v = entry.getValue();
+            String k = entry.getKey();
+            if (v instanceof String) e.putString(k, (String) v);
+            else if (v instanceof Boolean) e.putBoolean(k, (Boolean) v);
+            else if (v instanceof Integer) e.putInt(k, (Integer) v);
+            else if (v instanceof Long) e.putLong(k, (Long) v);
+            else if (v instanceof Float) e.putFloat(k, (Float) v);
+            else if (v instanceof java.util.Set) e.putStringSet(k, (java.util.Set<String>) v);
+        }
+        e.commit();
+        return p;
+    }
+
+    private void migratePrefs() {
+        SharedPreferences.Editor e = prefs.edit();
+        // 0.x stored all filter rules inside SharedPreferences; they now live in files.
+        e.remove("adblock_domain_rules").remove("adblock_allow_rules").remove("adblock_last_update").remove("adblock_filter_version");
+        if (!prefs.contains("search_engine")) e.putString("search_engine", "brave");
+        e.apply();
     }
 
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        String incomingUrl = intent == null ? null : intent.getDataString();
-        if (isBackupWebUrl(incomingUrl)) {
-            if (tabs.size() < MAX_TABS) addTab(incomingUrl);
-            else {
-                current().loadUrl(incomingUrl);
-                Toast.makeText(this, "Opened in the current tab because the tab limit was reached", Toast.LENGTH_LONG).show();
-            }
+        String url = incomingUrl(intent);
+        if (url != null) openInNewTab(url, false);
+    }
+
+    private String incomingUrl(Intent intent) {
+        if (intent == null) return null;
+        String action = intent.getAction();
+        if (Intent.ACTION_VIEW.equals(action)) {
+            String data = intent.getDataString();
+            if (Store.isWeb(data)) return data;
+        }
+        if (Intent.ACTION_SEND.equals(action)) {
+            String text = intent.getStringExtra(Intent.EXTRA_TEXT);
+            if (text != null && !text.trim().isEmpty()) return resolveInput(text.trim());
+        }
+        if (Intent.ACTION_WEB_SEARCH.equals(action)) {
+            String q = intent.getStringExtra(android.app.SearchManager.QUERY);
+            if (q != null && !q.trim().isEmpty()) return resolveInput(q.trim());
+        }
+        return null;
+    }
+
+    @Override protected void onPause() {
+        super.onPause();
+        if (shields == null) return;
+        shields.persistStats();
+        store.flush();
+        saveSession();
+        boolean bg = prefs.getBoolean("background_play", false);
+        for (Tab t : tabs) {
+            if (t.web == null) continue;
+            if (bg && tabs.indexOf(t) == active) continue;
+            t.web.onPause();
         }
     }
 
-    @Override public boolean dispatchKeyEvent(KeyEvent event) {
-        if (event.getAction() == KeyEvent.ACTION_DOWN && event.isCtrlPressed()) {
-            int key = event.getKeyCode();
-            if (key == KeyEvent.KEYCODE_L) {
-                address.requestFocus();
-                address.selectAll();
-                ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
-                    .showSoftInput(address, InputMethodManager.SHOW_IMPLICIT);
-                return true;
-            }
-            if (key == KeyEvent.KEYCODE_T) { addTab(HOME_PAGE); return true; }
-            if (key == KeyEvent.KEYCODE_W) { closeTab(); return true; }
-            if (key == KeyEvent.KEYCODE_R) { current().reload(); return true; }
-            if (key == KeyEvent.KEYCODE_TAB && tabs.size() > 1) {
-                int direction = event.isShiftPressed() ? -1 : 1;
-                selectTab((active + direction + tabs.size()) % tabs.size());
-                return true;
-            }
-        }
-        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_ESCAPE
-            && !readerModeTabs.isEmpty() && readerModeTabs.contains(current())) {
-            toggleReaderMode();
-            return true;
-        }
-        return super.dispatchKeyEvent(event);
-    }
-
-    private void registerUpdateReceiver() {
-        if (updateReceiverRegistered) return;
-        IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(updateDownloadReceiver, filter, Context.RECEIVER_EXPORTED);
-        } else {
-            registerReceiver(updateDownloadReceiver, filter);
-        }
-        updateReceiverRegistered = true;
-    }
-
-    private void checkForUpdates(boolean force) {
-        long now = System.currentTimeMillis();
-        long lastCheck = prefs.getLong("update_last_check", 0L);
-        if (!force && now - lastCheck < UPDATE_CHECK_THROTTLE) return;
-        prefs.edit().putLong("update_last_check", now).apply();
-
-        new Thread(() -> {
-            HttpURLConnection connection = null;
-            try {
-                connection = (HttpURLConnection) new URL(RELEASES_API).openConnection();
-                connection.setRequestMethod("GET");
-                connection.setConnectTimeout(10000);
-                connection.setReadTimeout(15000);
-                connection.setRequestProperty("Accept", "application/vnd.github+json");
-                connection.setRequestProperty("User-Agent", "ASTER-Browser-Android");
-                if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) return;
-                String json = new String(readLimited(connection.getInputStream(), 2 * 1024 * 1024), "UTF-8");
-                JSONObject release = new JSONObject(json);
-                String tag = release.optString("tag_name", "").trim();
-                JSONArray assets = release.optJSONArray("assets");
-                String apkUrl = null;
-                if (assets != null) {
-                    for (int i = 0; i < assets.length(); i++) {
-                        JSONObject asset = assets.optJSONObject(i);
-                        if (asset != null && UPDATE_APK_NAME.equals(asset.optString("name"))) {
-                            apkUrl = asset.optString("browser_download_url", null);
-                            break;
-                        }
-                    }
-                }
-                if (apkUrl == null || !apkUrl.startsWith("https://")) return;
-                if (compareVersions(tag, "v" + BuildConfig.VERSION_NAME) <= 0) return;
-                String finalApkUrl = apkUrl;
-                runOnUiThread(() -> showUpdateAvailable(tag, finalApkUrl));
-            } catch (Exception ignored) {
-                // Update checks are best-effort and must never interrupt browsing.
-            } finally {
-                if (connection != null) connection.disconnect();
-            }
-        }, "ASTER-update-check").start();
-    }
-
-    private int compareVersions(String remote, String local) {
-        String[] a = remote.replaceFirst("^[vV]", "").split("\\.");
-        String[] b = local.replaceFirst("^[vV]", "").split("\\.");
-        for (int i = 0; i < Math.max(a.length, b.length); i++) {
-            int av = i < a.length ? parseVersionPart(a[i]) : 0;
-            int bv = i < b.length ? parseVersionPart(b[i]) : 0;
-            if (av != bv) return Integer.compare(av, bv);
-        }
-        return 0;
-    }
-
-    private int parseVersionPart(String part) {
-        String digits = part.replaceAll("[^0-9].*$", "");
-        try { return Integer.parseInt(digits); }
-        catch (Exception ignored) { return 0; }
-    }
-
-    private void showUpdateAvailable(String version, String apkUrl) {
-        if (isFinishing()) return;
-        new AlertDialog.Builder(this)
-            .setTitle("ASTER " + version + " is available")
-            .setMessage("A newer version of ASTER Browser is ready. Download it now? Android will ask you to confirm the installation.")
-            .setNegativeButton("Later", null)
-            .setPositiveButton("Download update", (dialog, which) -> downloadUpdate(apkUrl))
-            .show();
-    }
-
-    private void downloadUpdate(String apkUrl) {
-        try {
-            DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-            if (manager == null) throw new IllegalStateException("Download service unavailable");
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(apkUrl));
-            request.setTitle("ASTER Browser update");
-            request.setDescription("Downloading the latest ASTER version");
-            request.setMimeType("application/vnd.android.package-archive");
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, UPDATE_APK_NAME);
-            long id = manager.enqueue(request);
-            prefs.edit().putLong("update_download_id", id).apply();
-            Toast.makeText(this, "Downloading ASTER update…", Toast.LENGTH_LONG).show();
-        } catch (Exception e) {
-            Toast.makeText(this, "Could not download update: " + e.getMessage(), Toast.LENGTH_LONG).show();
+    @Override protected void onResume() {
+        super.onResume();
+        if (shields == null) return;
+        Tab t = current();
+        if (t != null && t.web != null) t.web.onResume();
+        if (updater != null) {
+            updater.resumePending();
+            updater.check(false);
         }
     }
 
-    private void openDownloadedUpdate(long downloadId) {
-        DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-        if (manager == null) return;
-        DownloadManager.Query query = new DownloadManager.Query().setFilterById(downloadId);
-        try (android.database.Cursor cursor = manager.query(query)) {
-            if (cursor == null || !cursor.moveToFirst()) return;
-            int statusColumn = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
-            if (statusColumn < 0 || cursor.getInt(statusColumn) != DownloadManager.STATUS_SUCCESSFUL) {
-                Toast.makeText(this, "ASTER update download failed", Toast.LENGTH_LONG).show();
-                return;
-            }
+    @Override protected void onDestroy() {
+        if (fileCallback != null) { fileCallback.onReceiveValue(null); fileCallback = null; }
+        if (pendingMedia != null) { try { pendingMedia.deny(); } catch (Exception ignored) { } pendingMedia = null; }
+        if (pendingGeo != null && pendingGeoOrigin != null) {
+            try { pendingGeo.invoke(pendingGeoOrigin, false, false); } catch (Exception ignored) { }
+            pendingGeo = null;
         }
-        Uri apkUri = manager.getUriForDownloadedFile(downloadId);
-        if (apkUri == null) {
-            Toast.makeText(this, "Could not open downloaded update", Toast.LENGTH_LONG).show();
+        if (updater != null) updater.unregister();
+        if (shields != null) {
+            shields.persistStats();
+            store.flush();
+            saveSession();
+        }
+        for (Tab t : tabs) destroyWeb(t);
+        if (shields != null && (incognito || (isFinishing() && prefs.getBoolean("clear_on_exit", false)))) wipeSiteData();
+        if (sounds != null) sounds.release();
+        super.onDestroy();
+    }
+
+    @Override public void onConfigurationChanged(Configuration c) {
+        super.onConfigurationChanged(c);
+        if (content != null) layoutChrome();
+    }
+
+    @Override public void onBackPressed() {
+        if (customView != null) { exitFullscreen(); return; }
+        if (fab != null && fab.isExpanded()) { fab.collapse(); return; }
+        if (findBar != null && findBar.getVisibility() == View.VISIBLE) { closeFind(); return; }
+        if (address != null && address.hasFocus()) { address.clearFocus(); hideKeyboard(); return; }
+        Tab t = current();
+        if (t != null && t.web != null && t.web.canGoBack()) { t.web.goBack(); return; }
+        if (t != null && !t.start && tabs.size() > 1 && t.web != null && !t.web.canGoBack()) {
+            closeTab(active);
             return;
         }
-        if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
-            new AlertDialog.Builder(this)
-                .setTitle("Allow ASTER updates")
-                .setMessage("Enable permission to install apps from ASTER Browser, then return to install the update.")
-                .setNegativeButton("Later", null)
-                .setPositiveButton("Open settings", (d, w) -> {
-                    Intent settings = new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + getPackageName()));
-                    startActivity(settings);
-                }).show();
-            return;
-        }
-        try {
-            prefs.edit().putLong("update_download_id", -1L).apply();
-            Intent install = new Intent(Intent.ACTION_VIEW);
-            install.setDataAndType(apkUri, "application/vnd.android.package-archive");
-            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(install);
-        } catch (Exception e) {
-            Toast.makeText(this, "Android could not open the installer: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
+        super.onBackPressed();
     }
 
-    private int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+    @Override public boolean dispatchKeyEvent(KeyEvent e) {
+        if (e.getAction() == KeyEvent.ACTION_DOWN && e.isCtrlPressed() && address != null) {
+            switch (e.getKeyCode()) {
+                case KeyEvent.KEYCODE_L: address.requestFocus(); showKeyboard(address); return true;
+                case KeyEvent.KEYCODE_T: openInNewTab(null, false); return true;
+                case KeyEvent.KEYCODE_W: closeTab(active); return true;
+                case KeyEvent.KEYCODE_R: reload(); return true;
+                case KeyEvent.KEYCODE_F: openFind(); return true;
+                case KeyEvent.KEYCODE_D: toggleBookmark(); return true;
+                case KeyEvent.KEYCODE_N: if (e.isShiftPressed()) { openPrivate(null); return true; } break;
+                case KeyEvent.KEYCODE_TAB:
+                    if (tabs.size() > 1) select((active + (e.isShiftPressed() ? -1 : 1) + tabs.size()) % tabs.size());
+                    return true;
+                default: break;
+            }
+        }
+        return super.dispatchKeyEvent(e);
+    }
 
-    private GradientDrawable rounded(int color, int radius) {
+    // ================================================================== UI helpers
+
+    int dp(float v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+
+    GradientDrawable shape(int fill, float radiusDp, int stroke) {
         GradientDrawable d = new GradientDrawable();
-        d.setColor(color);
-        d.setCornerRadius(dp(radius));
-        if (isLiquidGlassTheme()) {
-            d.setStroke(dp(1), Color.argb(105, 223, 239, 255));
-        }
+        d.setColor(fill);
+        d.setCornerRadius(dp(radiusDp));
+        if (stroke != 0) d.setStroke(dp(1), stroke);
+        else if (theme != null && theme.glass) d.setStroke(dp(1), Color.argb(90, 223, 239, 255));
         return d;
     }
 
-    private boolean isLiquidGlassTheme() {
-        return "liquid".equals(prefs == null ? "aster" : prefs.getString("ui_theme", "aster"));
+    Drawable pressable(int fill, float radiusDp, int stroke) {
+        return new RippleDrawable(ColorStateList.valueOf(Theme.withAlpha(theme.accent, 90)), shape(fill, radiusDp, stroke), null);
     }
 
-    private void configureThemeColors() {
-        String theme = prefs == null ? "aster" : prefs.getString("ui_theme", "aster");
-        if ("gx".equals(theme)) {
-            BG = Color.rgb(15, 8, 13);
-            PANEL = Color.rgb(39, 18, 30);
-            TEXT = Color.rgb(255, 244, 248);
-            MUTED = Color.rgb(194, 158, 174);
-            ACCENT = Color.rgb(255, 54, 112);
-        } else if ("liquid".equals(theme)) {
-            BG = Color.rgb(10, 16, 29);
-            PANEL = Color.argb(165, 91, 111, 145);
-            TEXT = Color.rgb(247, 250, 255);
-            MUTED = Color.rgb(193, 207, 229);
-            ACCENT = Color.rgb(174, 218, 255);
-        } else {
-            BG = Color.rgb(13, 11, 18);
-            PANEL = Color.rgb(30, 24, 39);
-            TEXT = Color.rgb(241, 244, 250);
-            MUTED = Color.rgb(174, 163, 190);
-            ACCENT = Color.rgb(194, 112, 255);
-        }
+    TextView text(String s, float sp, int color) {
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setTextSize(sp);
+        t.setTextColor(color);
+        return t;
     }
 
-    private String currentThemeName() {
-        String theme = prefs.getString("ui_theme", "aster");
-        if ("gx".equals(theme)) return "GX Neon";
-        if ("liquid".equals(theme)) return "Liquid Glass";
-        return "ASTER Night";
+    TextView bold(String s, float sp, int color) {
+        TextView t = text(s, sp, color);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        return t;
     }
 
-    private void applyThemeToViews() {
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
-        if (root != null) root.setBackgroundColor(BG);
-        if (toolbar != null) {
-            toolbar.setBackgroundColor(isLiquidGlassTheme() ? Color.argb(150, 18, 27, 46) : BG);
-            for (int i = 0; i < toolbar.getChildCount(); i++) {
-                View child = toolbar.getChildAt(i);
-                if (child != address) {
-                    child.setBackground(rounded(PANEL, 16));
-                    if (child instanceof TextView) ((TextView) child).setTextColor(ACCENT);
-                }
-            }
-        }
-        if (address != null) {
-            address.setTextColor(TEXT);
-            address.setHintTextColor(MUTED);
-            address.setBackground(rounded(PANEL, 18));
-        }
-        if (bottomBar != null) {
-            bottomBar.setBackgroundColor(isLiquidGlassTheme()
-                ? Color.argb(155, 19, 30, 49)
-                : ("gx".equals(prefs.getString("ui_theme", "aster")) ? Color.rgb(30, 10, 20) : Color.rgb(17, 13, 23)));
-            for (int i = 0; i < bottomBar.getChildCount(); i++) {
-                View child = bottomBar.getChildAt(i);
-                child.setBackground(rounded(PANEL, 16));
-                if (child instanceof TextView) ((TextView) child).setTextColor(TEXT);
-            }
-        }
-        if (progressBar != null) {
-            progressBar.setProgressTintList(android.content.res.ColorStateList.valueOf(ACCENT));
-            progressBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(BG));
-        }
-    }
-
-    private void applySelectedTheme(String theme) {
-        prefs.edit().putString("ui_theme", theme).apply();
-        configureThemeColors();
-        applyThemeToViews();
-        for (WebView tab : tabs) {
-            if (HOME_PAGE.equals(tab.getTag())) loadStartPage(tab);
-        }
-        Toast.makeText(this, currentThemeName() + " theme applied", Toast.LENGTH_SHORT).show();
-    }
-
-    private void showThemePicker() {
-        String[] labels = {
-            "ASTER Night — original violet",
-            "GX Neon — dark with neon red/pink accents",
-            "Liquid Glass — translucent glass-like panels"
-        };
-        String[] values = {"aster", "gx", "liquid"};
-        String current = prefs.getString("ui_theme", "aster");
-        int checked = 0;
-        for (int i = 0; i < values.length; i++) if (values[i].equals(current)) checked = i;
-        new AlertDialog.Builder(this)
-            .setTitle("Interface & themes")
-            .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                dialog.dismiss();
-                applySelectedTheme(values[which]);
-            })
-            .setNegativeButton("Close", null)
-            .show();
-    }
-
-    private void openPrivateWindow() {
-        if (Build.VERSION.SDK_INT < 28) {
-            new AlertDialog.Builder(this)
-                .setTitle("Private browsing unavailable")
-                .setMessage("An isolated private WebView profile requires Android 9 or newer.")
-                .setPositiveButton("OK", null).show();
-            return;
-        }
-        startActivity(new Intent(this, PrivateActivity.class));
-    }
-
-    private void openAndroidPermissionSettings() {
-        try {
-            Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:" + getPackageName()));
-            startActivity(intent);
-        } catch (Exception e) {
-            Toast.makeText(this, "Open ASTER permissions from Android Settings", Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private TextView button(String label, int size) {
-        TextView v = new TextView(this);
-        v.setText(label);
-        v.setTextColor(TEXT);
-        v.setTextSize(size);
+    private TextView chromeButton(String icon, float sp, String description) {
+        TextView v = text(icon, sp, theme.text);
         v.setGravity(Gravity.CENTER);
-        v.setPadding(dp(10), dp(8), dp(10), dp(8));
-        return v;
-    }
-
-    private TextView chromeButton(String label, int size, String description) {
-        TextView v = button(label, size);
-        v.setTypeface(Typeface.DEFAULT_BOLD);
-        v.setMinWidth(dp(44));
-        v.setMinHeight(dp(44));
-        v.setBackground(rounded(PANEL, 16));
         v.setContentDescription(description);
         v.setClickable(true);
         v.setFocusable(true);
         return v;
     }
 
-    private void buildUi() {
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BG);
-        setContentView(root);
-        if (Build.VERSION.SDK_INT >= 35) {
-            root.setOnApplyWindowInsetsListener((view, insets) -> {
-                android.graphics.Insets bars = insets.getInsets(
-                    android.view.WindowInsets.Type.systemBars() |
-                    android.view.WindowInsets.Type.displayCutout()
-                );
-                view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
-                return insets;
-            });
-            root.requestApplyInsets();
-        }
-
-        // Compact browser chrome: the web page gets the visual focus.
-        toolbar = new LinearLayout(this);
-        toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        toolbar.setPadding(dp(10), dp(9), dp(10), dp(8));
-        toolbar.setBackgroundColor(BG);
-
-        TextView privacy = chromeButton("⛨", 18, "ASTER privacy information");
-        privacy.setTextColor(ACCENT);
-        LinearLayout.LayoutParams privacyParams = new LinearLayout.LayoutParams(dp(42), dp(46));
-        privacyParams.rightMargin = dp(7);
-        toolbar.addView(privacy, privacyParams);
-        privacy.setOnClickListener(v -> showPrivacyPanel());
-
-        address = new EditText(this);
-        address.setSingleLine(true);
-        address.setTextSize(14);
-        address.setTextColor(TEXT);
-        address.setHintTextColor(MUTED);
-        address.setHint("Search or enter address");
-        address.setContentDescription("Search or enter a web address");
-        address.setPadding(dp(14), 0, dp(10), 0);
-        address.setSelectAllOnFocus(true);
-        address.setBackground(rounded(PANEL, 18));
-        address.setImeOptions(EditorInfo.IME_ACTION_GO);
-        address.setMinHeight(dp(46));
-        if (Build.VERSION.SDK_INT >= 26) address.setAutofillHints("url");
-        toolbar.addView(address, new LinearLayout.LayoutParams(0, dp(46), 1));
-        address.setOnEditorActionListener((v, action, event) -> {
-            if (action == EditorInfo.IME_ACTION_GO ||
-                (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
-                navigate(address.getText().toString());
-                hideKeyboard();
-                return true;
-            }
-            return false;
-        });
-
-        tabCount = chromeButton("1", 13, "Open tabs");
-        LinearLayout.LayoutParams tabsParams = new LinearLayout.LayoutParams(dp(42), dp(46));
-        tabsParams.leftMargin = dp(7);
-        toolbar.addView(tabCount, tabsParams);
-        tabCount.setOnClickListener(v -> showTabs());
-
-        TextView reload = chromeButton("↻", 20, "Reload page");
-        LinearLayout.LayoutParams reloadParams = new LinearLayout.LayoutParams(dp(42), dp(46));
-        reloadParams.leftMargin = dp(7);
-        toolbar.addView(reload, reloadParams);
-        reload.setOnClickListener(v -> current().reload());
-        root.addView(toolbar);
-
-        progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        progressBar.setMax(100);
-        progressBar.setProgressTintList(android.content.res.ColorStateList.valueOf(ACCENT));
-        progressBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(BG));
-        root.addView(progressBar, new LinearLayout.LayoutParams(-1, dp(2)));
-
-        webContainer = new FrameLayout(this);
-        root.addView(webContainer, new LinearLayout.LayoutParams(-1, 0, 1));
-
-        bottomBar = new LinearLayout(this);
-        bottomBar.setGravity(Gravity.CENTER);
-        bottomBar.setPadding(dp(8), dp(6), dp(8), dp(7));
-        bottomBar.setBackgroundColor(Color.rgb(17, 13, 23));
-        String[] labels = {"‹", "›", "⌂", "＋", "⋯"};
-        String[] descriptions = {"Go back", "Go forward", "Home", "New tab", "Browser menu"};
-        for (int i = 0; i < labels.length; i++) {
-            final int index = i;
-            TextView item = button(labels[i], 24);
-            item.setMinHeight(dp(46));
-            item.setBackground(rounded(index == 2 ? Color.rgb(43, 47, 59) : Color.rgb(27, 31, 40), 16));
-            item.setContentDescription(descriptions[i]);
-            LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(0, dp(46), 1);
-            itemParams.setMargins(dp(4), 0, dp(4), 0);
-            bottomBar.addView(item, itemParams);
-            item.setOnClickListener(v -> {
-                switch (index) {
-                    case 0:
-                        if (current().canGoBack()) current().goBack();
-                        break;
-                    case 1:
-                        if (current().canGoForward()) current().goForward();
-                        break;
-                    case 2:
-                        current().setTag(null);
-                        loadStartPage(current());
-                        break;
-                    case 3:
-                        addTab(HOME_PAGE);
-                        break;
-                    case 4:
-                        showMenu();
-                        break;
-                }
-            });
-        }
-        root.addView(bottomBar);
-        applyThemeToViews();
-        applyResponsiveLayout();
-    }
-
-    private void applyResponsiveLayout() {
-        boolean expanded = getResources().getConfiguration().screenWidthDp >= 600;
-        if (toolbar != null) toolbar.setPadding(dp(expanded ? 20 : 10), dp(expanded ? 14 : 9), dp(expanded ? 20 : 10), dp(expanded ? 12 : 8));
-        if (address != null) address.setTextSize(expanded ? 16 : 14);
-        if (bottomBar != null && bottomBar.getLayoutParams() instanceof LinearLayout.LayoutParams) {
-            LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) bottomBar.getLayoutParams();
-            params.width = expanded ? Math.max(dp(420), Math.min(dp(620), getResources().getDisplayMetrics().widthPixels - dp(48))) : -1;
-            params.height = dp(expanded ? 64 : 60);
-            params.gravity = Gravity.CENTER_HORIZONTAL;
-            bottomBar.setLayoutParams(params);
-            bottomBar.setPadding(dp(expanded ? 18 : 8), dp(6), dp(expanded ? 18 : 8), dp(7));
-        }
-    }
-
-    @Override public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        applyResponsiveLayout();
-    }
-
-    private WebView current() {
-        return tabs.get(active);
-    }
-
-    private WebView createWebView() {
-        WebView w = new WebView(this);
-        w.setBackgroundColor(Color.WHITE);
-
-        WebSettings settings = w.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setTextZoom(prefs.getInt("text_zoom", 100));
-        applyDesktopUserAgent(settings);
-        settings.setDomStorageEnabled(true);
-        settings.setLoadWithOverviewMode(true);
-        settings.setUseWideViewPort(true);
-        settings.setSupportZoom(true);
-        settings.setBuiltInZoomControls(true);
-        settings.setDisplayZoomControls(false);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setOffscreenPreRaster(false);
-        settings.setAllowFileAccess(false);
-        settings.setAllowContentAccess(false);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setSupportMultipleWindows(false);
-        if (Build.VERSION.SDK_INT >= 26) settings.setSafeBrowsingEnabled(true);
-
-        CookieManager.getInstance().setAcceptThirdPartyCookies(w, false);
-
-        w.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) ->
-            confirmDownload(url, userAgent, contentDisposition, mimeType));
-
-        w.setWebChromeClient(new WebChromeClient() {
-            @Override public void onPermissionRequest(PermissionRequest request) {
-                runOnUiThread(() -> promptForMediaPermission(request));
-            }
-
-            @Override public void onPermissionRequestCanceled(PermissionRequest request) {
-                if (request == pendingMediaPermissionRequest) {
-                    pendingMediaPermissionRequest = null;
-                    pendingMediaPermissionOrigin = null;
-                    pendingMediaPermissionResources = null;
-                }
-            }
-
-            @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-                runOnUiThread(() -> promptForLocationPermission(origin, callback));
-            }
-
-            @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
-                if (filePathCallback != null) filePathCallback.onReceiveValue(null);
-                filePathCallback = callback;
-                try {
-                    Intent chooser = params.createIntent();
-                    startActivityForResult(chooser, FILE_CHOOSER_REQUEST);
-                    return true;
-                } catch (Exception e) {
-                    filePathCallback = null;
-                    Toast.makeText(MainActivity.this, "No file picker is available on this device", Toast.LENGTH_LONG).show();
-                    return false;
-                }
-            }
-
-            @Override public void onProgressChanged(WebView view, int progress) {
-                if (view == current()) {
-                    progressBar.setVisibility(progress >= 100 ? View.GONE : View.VISIBLE);
-                    progressBar.setProgress(progress);
-                    if (progress == 100 && view.getUrl() != null) address.setText(HOME_PAGE.equals(view.getTag()) ? "" : view.getUrl());
-                }
-            }
-
-            @Override public void onReceivedTitle(WebView view, String title) {
-                if (view == current()) tabCount.setContentDescription("Tabs. Current page: " + title);
-            }
-        });
-
-        w.setWebViewClient(new WebViewClient() {
-            @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                readerModeTabs.remove(view);
-                if (!"https://aster.start/".equals(url)) view.setTag(null);
-                String host = normalizedHost(Uri.parse(url).getHost());
-                if (host == null) topLevelHosts.remove(view);
-                else topLevelHosts.put(view, host);
-                pageBlockedCounts.put(view, new AtomicInteger(0));
-            }
-
-            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                if (shouldBlockRequest(view, request.getUrl(), request.isForMainFrame())) {
-                    return blockedWebResponse();
-                }
-                return super.shouldInterceptRequest(view, request);
-            }
-
-            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                Uri uri = request.getUrl();
-                String scheme = uri.getScheme();
-                if ("aster-reader-exit".equalsIgnoreCase(scheme)) {
-                    readerModeTabs.remove(view);
-                    return true;
-                }
-                if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) return false;
-                try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, uri));
-                } catch (Exception e) {
-                    Toast.makeText(MainActivity.this, "No app can open this link", Toast.LENGTH_SHORT).show();
-                }
-                return true;
-            }
-
-            @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                // Never let users bypass an invalid or untrusted TLS certificate.
-                handler.cancel();
-                if (view == current()) {
-                    Toast.makeText(MainActivity.this, "ASTER blocked a page with an invalid security certificate", Toast.LENGTH_LONG).show();
-                }
-            }
-
-            @Override public void onPageFinished(WebView view, String url) {
-                String host = normalizedHost(Uri.parse(url).getHost());
-                if (host != null) topLevelHosts.put(view, host);
-                boolean isStartPage = HOME_PAGE.equals(view.getTag()) && "https://aster.start/".equals(url);
-                if (view == current()) address.setText(isStartPage ? "" : url);
-                if (!isStartPage && isWebUrl(url)) {
-                    String old = prefs.getString("history", "");
-                    String line = url + "\n";
-                    if (!old.contains(line)) prefs.edit().putString("history", line + old).apply();
-                    injectCosmeticAdProtection(view, url);
-                }
-                saveSession();
-            }
-        });
-        return w;
-    }
-
-
-    /**
-     * Cosmetic fallback for ad UI that cannot be identified by host blocking.
-     * This does not remove server-side/in-stream YouTube ads delivered from the
-     * same video domains as legitimate media.
-     */
-    private void injectCosmeticAdProtection(WebView view, String url) {
-        if (view == null || url == null || !prefs.getBoolean("shield_enabled", true)) return;
-        String host = normalizedHost(Uri.parse(url).getHost());
-        if (host == null || isSiteException(host)) return;
-        String script = "(function(){try{"
-            + "if(window.__asterAdShieldInstalled)return;window.__asterAdShieldInstalled=true;"
-            + "var yt=/youtube\\.com$|youtube-nocookie\\.com$/.test(location.hostname);"
-            + "var css='ins.adsbygoogle,[id^=\\\"google_ads\\\"],iframe[src*=\\\"doubleclick.net\\\"],iframe[src*=\\\"googlesyndication.com\\\"],.ad-container,.ad-banner,.advertisement,.sponsored-ad{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;pointer-events:none!important;}';"
-            + "if(yt)css+='ytd-ad-slot-renderer,ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,ytd-in-feed-ad-layout-renderer,ytd-banner-promo-renderer,ytd-action-companion-ad-renderer,ytd-promoted-video-renderer,ytd-companion-slot-renderer,#player-ads,#masthead-ad,.video-ads,.ytp-ad-module,.ytp-ad-overlay-container,.ytp-ad-text-overlay,.ytp-ad-player-overlay,.ytp-ad-image-overlay{display:none!important;visibility:hidden!important;max-height:0!important;}';"
-            + "var st=document.createElement('style');st.id='__aster_ad_shield_css';st.textContent=css;(document.head||document.documentElement).appendChild(st);"
-            + "var clean=function(){try{"
-            + "document.querySelectorAll('ins.adsbygoogle,[id^=google_ads],.ad-container,.ad-banner,.advertisement,ytd-ad-slot-renderer,ytd-display-ad-renderer,ytd-promoted-sparkles-web-renderer,ytd-in-feed-ad-layout-renderer,ytd-banner-promo-renderer,ytd-action-companion-ad-renderer,ytd-promoted-video-renderer,ytd-companion-slot-renderer').forEach(function(e){e.remove();});"
-            + "if(yt)document.querySelectorAll('.ytp-ad-skip-button,.ytp-ad-skip-button-modern,.ytp-skip-ad-button').forEach(function(b){if(b.getClientRects().length&&!b.disabled)b.click();});"
-            + "}catch(e){}};"
-            + "clean();var pending=false;new MutationObserver(function(){if(pending)return;pending=true;setTimeout(function(){pending=false;clean();},120);}).observe(document.documentElement,{childList:true,subtree:true});"
-            + "if(yt)setInterval(clean,1600);"
-            + "}catch(e){}})();";
-        view.evaluateJavascript(script, null);
-    }
-
-    private boolean shouldBlockRequest(WebView view, Uri uri, boolean isMainFrame) {
-        if (isMainFrame || !prefs.getBoolean("shield_enabled", true) || uri == null) return false;
-        String host = normalizedHost(uri.getHost());
-        if (host == null) return false;
-
-        String firstPartyHost = topLevelHosts.get(view);
-        if (isSiteException(firstPartyHost)) return false;
-        if (adBlockEngine == null || !adBlockEngine.shouldBlock(host)) return false;
-
-        totalBlockedRequests.incrementAndGet();
-        incrementCounter(pageBlockedCounts, view);
-        incrementCounter(blockedDomainCounts, host);
-        return true;
-    }
-
-    private <K> void incrementCounter(ConcurrentHashMap<K, AtomicInteger> counters, K key) {
-        AtomicInteger counter = counters.get(key);
-        if (counter == null) {
-            AtomicInteger created = new AtomicInteger(0);
-            AtomicInteger existing = counters.putIfAbsent(key, created);
-            counter = existing == null ? created : existing;
-        }
-        counter.incrementAndGet();
-    }
-
-    private WebResourceResponse blockedWebResponse() {
-        return new WebResourceResponse(
-            "text/plain", "UTF-8", new ByteArrayInputStream(new byte[0])
-        );
-    }
-
-    private String normalizedHost(String host) {
-        if (host == null) return null;
-        String value = host.trim().toLowerCase(Locale.ROOT);
-        while (value.endsWith(".")) value = value.substring(0, value.length() - 1);
-        return value.isEmpty() ? null : value;
-    }
-
-    private boolean isShieldBlockedHost(String host) {
-        for (String domain : SHIELD_BLOCKED_HOSTS) {
-            if (host.equals(domain) || host.endsWith("." + domain)) return true;
-        }
-        return false;
-    }
-
-    private boolean isSiteException(String host) {
-        if (host == null) return false;
-        String exceptions = prefs.getString("shield_site_exceptions", "");
-        for (String item : exceptions.split("\\n")) {
-            String allowed = normalizedHost(item);
-            if (host.equals(allowed)) return true;
-        }
-        return false;
-    }
-
-    private String currentSiteHost() {
-        if (tabs.isEmpty()) return null;
-        String url = current().getUrl();
-        String host = normalizedHost(url == null ? null : Uri.parse(url).getHost());
-        return host != null ? host : topLevelHosts.get(current());
-    }
-
-    private void toggleCurrentSiteException() {
-        String host = currentSiteHost();
-        if (host == null) {
-            Toast.makeText(this, "Open a website first", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        Set<String> exceptions = new LinkedHashSet<>();
-        String old = prefs.getString("shield_site_exceptions", "");
-        for (String line : old.split("\\n")) {
-            String value = normalizedHost(line);
-            if (value != null) exceptions.add(value);
-        }
-        boolean wasAllowed = exceptions.remove(host);
-        if (!wasAllowed) exceptions.add(host);
-        StringBuilder updated = new StringBuilder();
-        for (String value : exceptions) updated.append(value).append('\n');
-        prefs.edit().putString("shield_site_exceptions", updated.toString()).apply();
-        Toast.makeText(this,
-            wasAllowed ? "Protection restored for " + host : "Protection paused for " + host,
-            Toast.LENGTH_LONG).show();
-        current().reload();
-    }
-
-    private TextView panelText(String value, int size, int color) {
-        TextView text = new TextView(this);
-        text.setText(value);
-        text.setTextSize(size);
-        text.setTextColor(color);
-        text.setGravity(Gravity.CENTER_VERTICAL);
-        return text;
-    }
-
-    private void addPanelAction(LinearLayout panel, String label, Runnable action) {
-        TextView button = chromeButton(label, 14, label);
-        button.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(48));
-        params.topMargin = dp(9);
-        panel.addView(button, params);
-        button.setOnClickListener(v -> action.run());
-    }
-
-    private void showPrivacyPanel() {
-        if (tabs.isEmpty()) return;
-        boolean enabled = prefs.getBoolean("shield_enabled", true);
-        String host = currentSiteHost();
-        boolean excepted = isSiteException(host);
-        AtomicInteger pageCount = pageBlockedCounts.get(current());
-        int pageTotal = pageCount == null ? 0 : pageCount.get();
-
-        LinearLayout panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(18), dp(10), dp(18), dp(14));
-        panel.setBackgroundColor(BG);
-
-        TextView heading = panelText("ASTER SHIELD", 19, TEXT);
-        heading.setTypeface(Typeface.DEFAULT_BOLD);
-        panel.addView(heading);
-
-        TextView subtitle = panelText("Enhanced network filters plus targeted ad-placement cleanup", 13, MUTED);
-        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(-1, -2);
-        subtitleParams.topMargin = dp(4);
-        panel.addView(subtitle, subtitleParams);
-
-        LinearLayout statusCard = new LinearLayout(this);
-        statusCard.setOrientation(LinearLayout.VERTICAL);
-        statusCard.setPadding(dp(14), dp(13), dp(14), dp(13));
-        statusCard.setBackground(rounded(PANEL, 18));
-        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
-        cardParams.topMargin = dp(16);
-        panel.addView(statusCard, cardParams);
-
-        TextView state = panelText(enabled ? "●  PROTECTION ACTIVE" : "○  PROTECTION PAUSED", 14, enabled ? ACCENT : MUTED);
-        state.setTypeface(Typeface.DEFAULT_BOLD);
-        statusCard.addView(state);
-        TextView site = panelText("Current site: " + (host == null ? "New tab" : host), 13, TEXT);
-        LinearLayout.LayoutParams siteParams = new LinearLayout.LayoutParams(-1, -2);
-        siteParams.topMargin = dp(8);
-        statusCard.addView(site, siteParams);
-        TextView siteState = panelText("This site: " + (excepted ? "Protection paused" : "Protected"), 12, MUTED);
-        LinearLayout.LayoutParams siteStateParams = new LinearLayout.LayoutParams(-1, -2);
-        siteStateParams.topMargin = dp(3);
-        statusCard.addView(siteState, siteStateParams);
-
-        LinearLayout stats = new LinearLayout(this);
-        stats.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams statsParams = new LinearLayout.LayoutParams(-1, -2);
-        statsParams.topMargin = dp(12);
-        panel.addView(stats, statsParams);
-        addShieldStat(stats, String.valueOf(pageTotal), "THIS PAGE");
-        addShieldStat(stats, String.valueOf(totalBlockedRequests.get()), "THIS SESSION");
-        addShieldStat(stats, String.valueOf(adBlockEngine == null ? 0 : adBlockEngine.getRuleCount()), "FILTERED DOMAINS");
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle("Privacy & protection")
-            .setView(panel)
-            .setNegativeButton("Close", null)
-            .create();
-
-        addPanelAction(panel, enabled ? "Pause protection everywhere" : "Enable protection everywhere", () -> {
-            prefs.edit().putBoolean("shield_enabled", !prefs.getBoolean("shield_enabled", true)).apply();
-            dialog.dismiss();
-            current().reload();
-            Toast.makeText(this, prefs.getBoolean("shield_enabled", true) ? "ASTER Shield enabled" : "ASTER Shield disabled", Toast.LENGTH_SHORT).show();
-        });
-        if (host != null) {
-            addPanelAction(panel, excepted ? "Restore protection on this site" : "Pause protection on this site", () -> {
-                dialog.dismiss();
-                toggleCurrentSiteException();
-            });
-        }
-        addPanelAction(panel, "Update ad & tracker filter lists", () -> {
-            Toast.makeText(this, "Updating enhanced ad, tracker and DNS filter lists…", Toast.LENGTH_LONG).show();
-            adBlockEngine.updateAsync((success, downloaded, total) -> runOnUiThread(() -> {
-                if (success) {
-                    Toast.makeText(this, "Enhanced filters updated: " + downloaded + " domain rules", Toast.LENGTH_LONG).show();
-                    if (!isFinishing()) current().reload();
-                } else Toast.makeText(this, "Could not update filters. Existing rules are kept.", Toast.LENGTH_LONG).show();
-            }));
-        });
-        addPanelAction(panel, "View blocked domains", () -> {
-            dialog.dismiss();
-            showBlockedDomains();
-        });
-
-        TextView note = panelText("Uses EasyList, EasyPrivacy, AdGuard DNS and community host lists, plus best-effort YouTube ad cleanup. WebView cannot reliably remove video ads served from the same domains as the video. Some ads may remain.", 11, MUTED);
-        note.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams noteParams = new LinearLayout.LayoutParams(-1, -2);
-        noteParams.topMargin = dp(13);
-        panel.addView(note, noteParams);
-        dialog.show();
-    }
-
-    private void addShieldStat(LinearLayout parent, String value, String label) {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(12), dp(12), dp(12), dp(12));
-        card.setBackground(rounded(PANEL, 16));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
-        params.rightMargin = dp(5);
-        params.leftMargin = dp(5);
-        parent.addView(card, params);
-        TextView number = panelText(value, 22, ACCENT);
-        number.setTypeface(Typeface.DEFAULT_BOLD);
-        number.setGravity(Gravity.CENTER);
-        card.addView(number);
-        TextView caption = panelText(label, 10, MUTED);
-        caption.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams captionParams = new LinearLayout.LayoutParams(-1, -2);
-        captionParams.topMargin = dp(3);
-        card.addView(caption, captionParams);
-    }
-
-    private void showBlockedDomains() {
-        if (blockedDomainCounts.isEmpty()) {
-            new AlertDialog.Builder(this).setTitle("Blocked domains")
-                .setMessage("No domains have been blocked in this session yet.")
-                .setPositiveButton("OK", null).show();
-            return;
-        }
-        List<String> domains = new ArrayList<>(blockedDomainCounts.keySet());
-        Collections.sort(domains);
-        StringBuilder message = new StringBuilder();
-        int shown = 0;
-        for (String domain : domains) {
-            if (shown++ >= 30) break;
-            AtomicInteger count = blockedDomainCounts.get(domain);
-            message.append(domain).append("  ·  ")
-                .append(count == null ? 0 : count.get()).append('\n');
-        }
-        if (domains.size() > 30) message.append("\nAnd ").append(domains.size() - 30).append(" more...");
-        new AlertDialog.Builder(this).setTitle("Blocked domains (" + totalBlockedRequests.get() + ")")
-            .setMessage(message.toString()).setPositiveButton("OK", null).show();
-    }
-
-    private void loadStartPage(WebView target) {
-        String engine = prefs.getString("search_engine", "google");
-        String searchAction = "https://www.google.com/search";
-        if ("duckduckgo".equals(engine)) searchAction = "https://duckduckgo.com/";
-        else if ("bing".equals(engine)) searchAction = "https://www.bing.com/search";
-
-        StringBuilder html = new StringBuilder();
-        html.append("<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>");
-        html.append("<meta name='color-scheme' content='dark'><title>New tab - ASTER</title><style>");
-        html.append("*{box-sizing:border-box}html,body{min-height:100%;margin:0}");
-        String homeTheme = prefs.getString("home_theme", "violet");
-        String background = "#35204d 0%,#171321 42%,#0c0b11 100%";
-        if ("midnight".equals(homeTheme)) background = "#29354b 0%,#141b29 45%,#090d15 100%";
-        else if ("ocean".equals(homeTheme)) background = "#12475a 0%,#102530 45%,#080e14 100%";
-        else if ("crimson".equals(homeTheme)) background = "#512538 0%,#21131e 45%,#0d0b11 100%";
-        String uiTheme = prefs.getString("ui_theme", "aster");
-        if ("gx".equals(uiTheme)) background = "#55152d 0%,#24101f 48%,#10080e 100%";
-        else if ("liquid".equals(uiTheme)) background = "#42628c 0%,#1e2f4a 48%,#0a1020 100%";
-        html.append("body{background:radial-gradient(ellipse at 50% 8%,").append(background).append(");color:#f5f2fa;font-family:Arial, sans-serif}");
-        if ("gx".equals(uiTheme)) {
-            html.append(".logo{background:linear-gradient(145deg,#ff6b9f,#ff245e 62%,#8d123e);box-shadow:0 12px 42px #ff245e55}");
-            html.append("form{background:#261321;border-color:#a82c5b}button{background:linear-gradient(135deg,#ff5b91,#c51450)}.site{background:#241321;border-color:#71304d}");
-        } else if ("liquid".equals(uiTheme)) {
-            html.append("form,.site{background:rgba(220,235,255,.12);border:1px solid rgba(235,245,255,.32);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);box-shadow:0 14px 42px rgba(0,0,0,.22)}");
-            html.append("button{background:linear-gradient(135deg,rgba(221,238,255,.58),rgba(139,184,235,.42));color:#102039;border:1px solid rgba(255,255,255,.4)}");
-            html.append(".logo{background:linear-gradient(145deg,rgba(255,255,255,.88),rgba(135,180,231,.52));color:#14253d;box-shadow:0 12px 42px #9bcaff44}");
-        }
-        html.append(".page{min-height:100vh;max-width:720px;margin:auto;padding:clamp(42px,12vh,110px) 22px 34px;display:flex;flex-direction:column;align-items:center}");
-        html.append(".logo{width:62px;height:62px;border-radius:21px;display:grid;place-items:center;background:linear-gradient(145deg,#f08cff,#8d4dff 62%,#5431b8);color:#fff;font-size:30px;font-weight:900;box-shadow:0 12px 42px #9b4dff55}");
-        html.append(".name{margin-top:16px;font-size:23px;font-weight:900;letter-spacing:4px}.tag{margin-top:7px;color:#b5a9c8;font-size:12px;letter-spacing:.7px}");
-        html.append("form{width:100%;max-width:590px;margin-top:36px;display:flex;align-items:center;background:#211a2c;border:1px solid #57416f;border-radius:17px;padding:6px;box-shadow:0 14px 42px #0005}");
-        html.append("input{min-width:0;flex:1;height:48px;border:0;outline:0;background:transparent;color:#fff;padding:0 13px;font-size:15px}input::placeholder{color:#929bad}");
-        html.append("button{height:44px;padding:0 17px;border:0;border-radius:12px;background:linear-gradient(135deg,#d878ff,#8c5cff);color:#fff;font-size:13px;font-weight:800}");
-        html.append(".section{width:100%;max-width:590px;margin-top:38px}.heading{margin:0 0 15px;color:#aab2c1;font-size:11px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase}");
-        html.append(".sites{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}");
-        html.append(".site{min-height:100px;padding:15px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-decoration:none;color:#f3edf9;background:linear-gradient(145deg,#211b2b,#17131f);border:1px solid #392b49;border-radius:17px;transition:background .15s,border-color .15s}");
-        html.append(".site:active{background:#382448;border-color:#c77cff}.symbol{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;background:#382747;color:#e8b6ff;font-size:16px;font-weight:800}.label{font-size:12px;font-weight:600;overflow-wrap:anywhere;text-align:center}");
-        html.append(".saved{display:flex;flex-direction:column;gap:8px}.saved a{padding:13px 15px;border-radius:13px;background:#202631;border:1px solid #303949;color:#e9edf5;text-decoration:none;font-size:13px;overflow-wrap:anywhere}.empty{color:#7f899b;font-size:12px;padding:4px 2px}");
-        html.append(".footer{margin-top:auto;padding-top:45px;color:#657083;font-size:10px;letter-spacing:1px}");
-        html.append("@media(max-width:380px){.page{padding-left:15px;padding-right:15px}.sites{gap:8px}.site{min-height:88px}.label{font-size:11px}}");
-        html.append("</style></head><body><main class='page'>");
-        if (prefs.getBoolean("home_show_branding", true)) html.append("<div class='logo'>✦</div><div class='name'>ASTER</div><div class='tag'>A fresh start to the web</div>");
-        html.append("<form method='get' action='").append(searchAction).append("'>");
-        html.append("<input name='q' type='search' placeholder='Search the web' autocomplete='off' aria-label='Search the web'>");
-        html.append("<button type='submit'>Search</button></form>");
-        if (prefs.getBoolean("home_show_shortcuts", true)) {
-            html.append("<section class='section'><div class='heading'>Quick access</div><div class='sites'>");
-            appendStartCard(html, "Google", "G", "https://www.google.com");
-            appendStartCard(html, "YouTube", "▶", "https://www.youtube.com");
-            appendStartCard(html, "GitHub", "⌘", "https://github.com");
-            appendStartCard(html, "Wikipedia", "W", "https://www.wikipedia.org");
-            appendStartCard(html, "Reddit", "r", "https://www.reddit.com");
-            appendStartCard(html, "DuckDuckGo", "D", "https://duckduckgo.com");
-            html.append("</div></section>");
-        }
-
-        List<String> saved = new ArrayList<>();
-        for (String line : prefs.getString("bookmarks", "").split("\\n")) {
-            if (!line.trim().isEmpty() && isWebUrl(line.trim())) saved.add(line.trim());
-            if (saved.size() == 4) break;
-        }
-        if (prefs.getBoolean("home_show_bookmarks", true)) {
-            html.append("<section class='section'><div class='heading'>Bookmarks</div><div class='saved'>");
-            if (saved.isEmpty()) {
-                html.append("<div class='empty'>Pages you bookmark will appear here.</div>");
-            } else {
-                for (String url : saved) {
-                    String label = Uri.parse(url).getHost();
-                    if (label == null || label.isEmpty()) label = url;
-                    html.append("<a href='").append(escapeHtml(url)).append("'>")
-                        .append(escapeHtml(label)).append("</a>");
-                }
-            }
-            html.append("</div></section>");
-        }
-        html.append("<div class='footer'>ASTER BROWSER</div></main></body></html>");
-        target.setTag(HOME_PAGE);
-        target.loadDataWithBaseURL("https://aster.start/", html.toString(), "text/html", "UTF-8", null);
-    }
-
-    private void appendStartCard(StringBuilder html, String title, String symbol, String url) {
-        html.append("<a class='site' href='").append(url).append("'><b class='symbol'>")
-            .append(symbol).append("</b><span class='label'>").append(title)
-            .append("</span></a>");
-    }
-
-    private String escapeHtml(String value) {
-        return value.replace("&", "&amp;").replace("<", "&lt;")
-            .replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;");
-    }
-
-    private void addTab(String url) {
-        if (tabs.size() >= MAX_TABS) {
-            Toast.makeText(this, "ASTER supports up to " + MAX_TABS + " tabs", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        WebView w = createWebView();
-        tabs.add(w);
-        webContainer.addView(w, new FrameLayout.LayoutParams(-1, -1));
-        selectTab(tabs.size() - 1);
-        if (HOME_PAGE.equals(url)) loadStartPage(w);
-        else w.loadUrl(url);
-        saveSession();
-    }
-
-    private void selectTab(int index) {
-        if (index < 0 || index >= tabs.size()) return;
-        if (active >= 0 && active < tabs.size()) tabs.get(active).onPause();
-        active = index;
-        for (int i = 0; i < tabs.size(); i++) {
-            WebView tab = tabs.get(i);
-            if (i == active) {
-                tab.setVisibility(View.VISIBLE);
-                tab.onResume();
-            } else {
-                tab.setVisibility(View.GONE);
-                tab.onPause();
-            }
-        }
-        tabCount.setText(String.valueOf(tabs.size()));
-        address.setText(HOME_PAGE.equals(current().getTag()) || current().getUrl() == null ? "" : current().getUrl());
-        progressBar.setVisibility(View.GONE);
-        saveSession();
-    }
-
-    private boolean restoreSession() {
-        if (!prefs.getBoolean("restore_tabs", true)) return false;
-        try {
-            JSONArray saved = new JSONArray(prefs.getString("session_tabs", "[]"));
-            int limit = Math.min(saved.length(), MAX_TABS);
-            for (int i = 0; i < limit; i++) {
-                String url = saved.optString(i, "");
-                if (isWebUrl(url) || HOME_PAGE.equals(url)) addTab(url);
-            }
-            if (!tabs.isEmpty()) {
-                selectTab(Math.min(prefs.getInt("active_tab", 0), tabs.size() - 1));
-                return true;
-            }
-        } catch (Exception ignored) {
-            prefs.edit().remove("session_tabs").apply();
-        }
-        return false;
-    }
-
-    private void saveSession() {
-        if (prefs == null || tabs.isEmpty()) return;
-        JSONArray saved = new JSONArray();
-        for (int i = 0; i < tabs.size() && i < MAX_TABS; i++) {
-            String url = HOME_PAGE.equals(tabs.get(i).getTag()) ? HOME_PAGE : tabs.get(i).getUrl();
-            if (url == null || (!isWebUrl(url) && !HOME_PAGE.equals(url))) url = getHomepage();
-            saved.put(url);
-        }
-        prefs.edit()
-            .putString("session_tabs", saved.toString())
-            .putInt("active_tab", Math.min(active, tabs.size() - 1))
-            .apply();
-    }
-
-    private boolean isWebUrl(String value) {
-        return value != null && (value.regionMatches(true, 0, "https://", 0, 8)
-            || value.regionMatches(true, 0, "http://", 0, 7));
-    }
-
-    private String getHomepage() {
-        return prefs.getString("homepage", "https://www.google.com");
-    }
-
-    private String getSearchEngineName() {
-        String engine = prefs.getString("search_engine", "google");
-        if ("duckduckgo".equals(engine)) return "DuckDuckGo";
-        if ("bing".equals(engine)) return "Bing";
-        return "Google";
-    }
-
-    private String makeSearchUrl(String query) throws Exception {
-        String encoded = URLEncoder.encode(query, "UTF-8");
-        String engine = prefs.getString("search_engine", "google");
-        if ("duckduckgo".equals(engine)) return "https://duckduckgo.com/?q=" + encoded;
-        if ("bing".equals(engine)) return "https://www.bing.com/search?q=" + encoded;
-        return "https://www.google.com/search?q=" + encoded;
-    }
-
-    private void navigate(String input) {
-        String value = input.trim();
-        if (value.isEmpty()) return;
-
-        current().setTag(null);
-        if (isWebUrl(value)) {
-            current().loadUrl(value);
-        } else if (value.matches("(?i)^[a-z][a-z0-9+.-]*://.*")) {
-            Toast.makeText(this, "Only HTTP and HTTPS addresses are supported", Toast.LENGTH_SHORT).show();
-        } else if (value.contains(".") && !value.contains(" ")) {
-            current().loadUrl("https://" + value);
-        } else {
-            try {
-                current().loadUrl(makeSearchUrl(value));
-            } catch (Exception e) {
-                current().loadUrl("https://www.google.com");
-            }
-        }
-    }
-
-    private void hideKeyboard() {
-        InputMethodManager manager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (manager != null) manager.hideSoftInputFromWindow(address.getWindowToken(), 0);
-        address.clearFocus();
-    }
-
-    private void showTabs() {
-        LinearLayout content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(12), dp(8), dp(12), dp(10));
-        content.setBackgroundColor(BG);
-
-        LinearLayout header = new LinearLayout(this);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView summary = panelText(tabs.size() + " / " + MAX_TABS + " OPEN TABS", 12, MUTED);
-        summary.setTypeface(Typeface.DEFAULT_BOLD);
-        header.addView(summary, new LinearLayout.LayoutParams(0, dp(42), 1));
-        TextView newTab = chromeButton("+ New", 13, "Open new tab");
-        newTab.setTextColor(ACCENT);
-        header.addView(newTab, new LinearLayout.LayoutParams(dp(82), dp(42)));
-        content.addView(header);
-        newTab.setOnClickListener(v -> {
-            dialogSafeDismissTabs();
-            addTab(HOME_PAGE);
-        });
-
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout grid = new LinearLayout(this);
-        grid.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(grid);
-        LinearLayout row = null;
-
-        for (int i = 0; i < tabs.size(); i++) {
-            if (i % 2 == 0) {
-                row = new LinearLayout(this);
-                row.setOrientation(LinearLayout.HORIZONTAL);
-                LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
-                rowParams.bottomMargin = dp(10);
-                grid.addView(row, rowParams);
-            }
-            final int index = i;
-            WebView tab = tabs.get(i);
-            String title = tab.getTitle();
-            if (title == null || title.trim().isEmpty()) title = "New tab";
-            String url = tab.getUrl();
-            String host = "aster://start";
-            if (url != null && !url.isEmpty() && !HOME_PAGE.equals(tab.getTag())) {
-                String parsed = Uri.parse(url).getHost();
-                if (parsed != null) host = parsed;
-            }
-            LinearLayout card = new LinearLayout(this);
-            card.setOrientation(LinearLayout.VERTICAL);
-            card.setPadding(dp(12), dp(11), dp(12), dp(10));
-            card.setBackground(rounded(i == active ? Color.rgb(57, 38, 76) : PANEL, 17));
-            LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(0, dp(142), 1);
-            cardParams.setMargins(dp(4), dp(2), dp(4), dp(2));
-            row.addView(card, cardParams);
-
-            LinearLayout top = new LinearLayout(this);
-            top.setGravity(Gravity.CENTER_VERTICAL);
-            TextView mark = panelText(host.equals("aster://start") ? "✦" : host.substring(0, 1).toUpperCase(Locale.ROOT), 17, ACCENT);
-            mark.setGravity(Gravity.CENTER);
-            mark.setBackground(rounded(Color.rgb(54, 39, 69), 12));
-            card.addView(mark, new LinearLayout.LayoutParams(dp(34), dp(34)));
-            TextView close = chromeButton("×", 18, "Close tab");
-            close.setTextColor(MUTED);
-            LinearLayout.LayoutParams closeParams = new LinearLayout.LayoutParams(dp(34), dp(34));
-            closeParams.gravity = Gravity.RIGHT;
-            top.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
-            top.addView(close, closeParams);
-            card.addView(top);
-            TextView titleView = panelText((i == active ? "● " : "") + title, 13, TEXT);
-            titleView.setTypeface(Typeface.DEFAULT_BOLD);
-            titleView.setMaxLines(2);
-            titleView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(-1, 0, 1);
-            titleParams.topMargin = dp(8);
-            card.addView(titleView, titleParams);
-            TextView urlView = panelText(host, 10, MUTED);
-            urlView.setMaxLines(1);
-            urlView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            card.addView(urlView);
-            card.setOnClickListener(v -> {
-                selectTab(index);
-                dialogSafeDismissTabs();
-            });
-            close.setOnClickListener(v -> {
-                closeTabAt(index);
-                dialogSafeDismissTabs();
-            });
-        }
-        if (tabs.size() % 2 != 0 && row != null) row.addView(new View(this), new LinearLayout.LayoutParams(0, dp(142), 1));
-        content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle("ASTER  /  TABS")
-            .setView(content)
-            .setNegativeButton("Done", null)
-            .create();
-        pendingTabsDialog = dialog;
-        dialog.show();
-    }
-
-    private void dialogSafeDismissTabs() {
-        if (pendingTabsDialog != null && pendingTabsDialog.isShowing()) pendingTabsDialog.dismiss();
-        pendingTabsDialog = null;
-    }
-
-    private void closeTab() {
-        closeTabAt(active);
-    }
-
-    private void closeTabAt(int index) {
-        if (index < 0 || index >= tabs.size()) return;
-        if (tabs.size() == 1) {
-            current().loadUrl(getHomepage());
-            return;
-        }
-        WebView closing = tabs.remove(index);
-        readerModeTabs.remove(closing);
-        topLevelHosts.remove(closing);
-        pageBlockedCounts.remove(closing);
-        webContainer.removeView(closing);
-        closing.stopLoading();
-        closing.destroy();
-
-        if (index < active) active--;
-        else if (index == active) active = Math.min(index, tabs.size() - 1);
-        selectTab(active);
-        saveSession();
-    }
-
-    private void addMenuTile(LinearLayout row, String icon, String label, AlertDialog dialog, Runnable action) {
-        TextView tile = button(icon + "\n" + label, 13);
-        tile.setTypeface(Typeface.DEFAULT_BOLD);
-        tile.setGravity(Gravity.CENTER);
-        tile.setMinHeight(dp(76));
-        tile.setBackground(rounded(PANEL, 17));
-        tile.setContentDescription(label);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(76), 1);
-        params.setMargins(dp(4), dp(4), dp(4), dp(4));
-        row.addView(tile, params);
-        tile.setOnClickListener(v -> {
-            dialog.dismiss();
+    void onTap(View v, final Runnable action) {
+        v.setOnClickListener(x -> {
+            feedback(x);
             action.run();
         });
     }
 
-    private void showMenu() {
-        LinearLayout panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(12), dp(12), dp(12), dp(12));
-        panel.setBackgroundColor(BG);
+    void feedback(View v) {
+        if (prefs.getBoolean("gx_haptics", true) && v != null) v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        if (sounds != null) sounds.click();
+    }
 
-        TextView heading = panelText("ASTER  /  BROWSER MENU", 17, TEXT);
-        heading.setTypeface(Typeface.DEFAULT_BOLD);
-        heading.setPadding(dp(8), dp(8), dp(8), dp(12));
-        panel.addView(heading);
+    private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_SHORT).show(); }
 
-        AlertDialog dialog = new AlertDialog.Builder(this)
-            .setView(panel)
-            .setNegativeButton("Close", null)
-            .create();
-
-        LinearLayout row1 = new LinearLayout(this);
-        addMenuTile(row1, "★", "Bookmarks", dialog, () -> showSavedList("Bookmarks", "bookmarks"));
-        addMenuTile(row1, "◷", "History", dialog, () -> showSavedList("History", "history"));
-        panel.addView(row1);
-
-        LinearLayout row2 = new LinearLayout(this);
-        addMenuTile(row2, "⇩", "Downloads", dialog, () -> {
-            try { startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)); }
-            catch (Exception e) { Toast.makeText(this, "Downloads are managed by Android", Toast.LENGTH_SHORT).show(); }
+    private void applyInsets(View v) {
+        if (Build.VERSION.SDK_INT < 35) return;
+        v.setOnApplyWindowInsetsListener((view, insets) -> {
+            android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+            android.graphics.Insets ime = insets.getInsets(WindowInsets.Type.ime());
+            view.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, ime.bottom));
+            return insets;
         });
-        addMenuTile(row2, "⛨", "Ad blocker", dialog, () -> showPrivacyPanel());
-        panel.addView(row2);
-
-        LinearLayout row3 = new LinearLayout(this);
-        addMenuTile(row3, "⌕", "Find in page", dialog, () -> findInPage());
-        addMenuTile(row3, "↗", "Share page", dialog, () -> sharePage());
-        panel.addView(row3);
-
-        LinearLayout row4 = new LinearLayout(this);
-        addMenuTile(row4, "⚙", "Settings", dialog, () -> showSettings());
-        addMenuTile(row4, "⇄", "Backup & restore", dialog, () -> showBackupRestore());
-        panel.addView(row4);
-
-        LinearLayout row5 = new LinearLayout(this);
-        addMenuTile(row5, "＋", "New tab", dialog, () -> addTab(HOME_PAGE));
-        addMenuTile(row5, "⌫", "Clear browsing data", dialog, () -> confirmClearBrowsingData());
-        panel.addView(row5);
-
-        LinearLayout row6 = new LinearLayout(this);
-        addMenuTile(row6, "▣", prefs.getBoolean("desktop_site", false) ? "Mobile site" : "Desktop site", dialog, () -> toggleDesktopSite());
-        addMenuTile(row6, "☷", readerModeTabs.contains(current()) ? "Exit reader" : "Reader mode", dialog, () -> toggleReaderMode());
-        panel.addView(row6);
-
-        LinearLayout row7 = new LinearLayout(this);
-        addMenuTile(row7, "文", "Translate page", dialog, () -> translateCurrentPage());
-        addMenuTile(row7, "✧", "Interface themes", dialog, () -> showThemePicker());
-        panel.addView(row7);
-
-        LinearLayout row8 = new LinearLayout(this);
-        addMenuTile(row8, "◉", "Private window", dialog, () -> openPrivateWindow());
-        addMenuTile(row8, "♙", "Site permissions", dialog, () -> showSitePermissionsManager());
-        panel.addView(row8);
-
-        dialog.show();
+        v.requestApplyInsets();
     }
 
-    private void addBookmark() {
-        if (HOME_PAGE.equals(current().getTag())) return;
-        String url = current().getUrl();
-        if (!isWebUrl(url)) return;
-        Set<String> entries = new LinkedHashSet<>();
-        String old = prefs.getString("bookmarks", "");
-        for (String line : old.split("\n")) if (!line.trim().isEmpty()) entries.add(line.trim());
-        if (entries.contains(url)) {
-            Toast.makeText(this, "Already bookmarked", Toast.LENGTH_SHORT).show();
-            return;
+    private void showKeyboard(View v) {
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null) imm.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT);
+    }
+
+    private void hideKeyboard() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null && address != null) imm.hideSoftInputFromWindow(address.getWindowToken(), 0);
+    }
+
+    /** Bottom sheet dialog with ASTER styling. */
+    Dialog sheet(View body) {
+        Dialog d = new Dialog(this);
+        d.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout frame = new LinearLayout(this);
+        frame.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(theme.glass ? Color.rgb(18, 26, 44) : theme.bg);
+        float r = dp(24);
+        bg.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
+        bg.setStroke(dp(1), Theme.withAlpha(theme.accent, 70));
+        frame.setBackground(bg);
+        View handle = new View(this);
+        handle.setBackground(shape(Theme.withAlpha(theme.muted, 120), 3, 0));
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(dp(40), dp(5));
+        hp.gravity = Gravity.CENTER_HORIZONTAL;
+        hp.topMargin = dp(10);
+        frame.addView(handle, hp);
+        ScrollView sv = new ScrollView(this);
+        sv.setFillViewport(false);
+        sv.addView(body);
+        frame.addView(sv, new LinearLayout.LayoutParams(-1, -2));
+        d.setContentView(frame);
+        Window w = d.getWindow();
+        if (w != null) {
+            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            int width = Math.min(getResources().getDisplayMetrics().widthPixels, dp(600));
+            w.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT);
+            w.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+            w.setWindowAnimations(android.R.style.Animation_InputMethod);
+            w.setDimAmount(0.55f);
         }
-        entries.add(url);
-        StringBuilder result = new StringBuilder();
-        for (String item : entries) result.append(item).append('\n');
-        prefs.edit().putString("bookmarks", result.toString()).apply();
-        Toast.makeText(this, "Bookmark saved", Toast.LENGTH_SHORT).show();
+        applyInsets(frame);
+        return d;
     }
 
-    private void showBackupRestore() {
-        String[] actions = {"Export backup", "Import backup"};
-        new AlertDialog.Builder(this).setTitle("Backup & restore")
-            .setItems(actions, (dialog, which) -> {
-                if (which == 0) {
-                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-                    intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.setType("application/json");
-                    intent.putExtra(Intent.EXTRA_TITLE, "ASTER-backup.json");
-                    try {
-                        startActivityForResult(intent, BACKUP_EXPORT_REQUEST);
-                    } catch (Exception e) {
-                        Toast.makeText(this, "Could not open the file picker", Toast.LENGTH_LONG).show();
-                    }
-                } else {
-                    new AlertDialog.Builder(this)
-                        .setTitle("Import backup?")
-                        .setMessage("Importing replaces your current bookmarks, history, browser settings and open tabs. Export a backup first if you want to keep the current data.")
-                        .setNegativeButton("Cancel", null)
-                        .setPositiveButton("Choose file", (confirmDialog, whichAction) -> {
-                            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                            intent.addCategory(Intent.CATEGORY_OPENABLE);
-                            intent.setType("application/json");
-                            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                            try {
-                                startActivityForResult(intent, BACKUP_IMPORT_REQUEST);
-                            } catch (Exception e) {
-                                Toast.makeText(this, "Could not open the file picker", Toast.LENGTH_LONG).show();
-                            }
-                        }).show();
-                }
-            }).show();
-    }
+    /** Full-screen page used for tabs, settings, history, bookmarks and downloads. */
+    final class Page {
+        final Dialog dialog;
+        final LinearLayout body;
+        final LinearLayout header;
+        final LinearLayout bottom;
+        final ScrollView scroll;
 
-    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == FILE_CHOOSER_REQUEST) {
-            if (filePathCallback != null) {
-                Uri[] results = resultCode == RESULT_OK && data != null
-                    ? WebChromeClient.FileChooserParams.parseResult(resultCode, data) : null;
-                filePathCallback.onReceiveValue(results);
-                filePathCallback = null;
+        Page(String title) {
+            dialog = new Dialog(MainActivity.this, android.R.style.Theme_DeviceDefault_NoActionBar);
+            LinearLayout root = new LinearLayout(MainActivity.this);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setBackgroundColor(theme.bg);
+            header = new LinearLayout(MainActivity.this);
+            header.setGravity(Gravity.CENTER_VERTICAL);
+            header.setPadding(dp(6), dp(6), dp(10), dp(6));
+            TextView back = chromeButton("←", 22, "Back");
+            onTap(back, dialog::dismiss);
+            header.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
+            TextView t = bold(title, 19, theme.text);
+            header.addView(t, new LinearLayout.LayoutParams(0, -2, 1));
+            root.addView(header);
+            scroll = new ScrollView(MainActivity.this);
+            body = new LinearLayout(MainActivity.this);
+            body.setOrientation(LinearLayout.VERTICAL);
+            body.setPadding(dp(14), dp(4), dp(14), dp(24));
+            scroll.addView(body);
+            root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+            bottom = new LinearLayout(MainActivity.this);
+            bottom.setGravity(Gravity.CENTER);
+            bottom.setPadding(dp(12), dp(8), dp(12), dp(10));
+            bottom.setVisibility(View.GONE);
+            root.addView(bottom);
+            dialog.setContentView(root);
+            Window w = dialog.getWindow();
+            if (w != null) {
+                w.setBackgroundDrawable(new ColorDrawable(theme.bg));
+                w.setStatusBarColor(theme.bg);
+                w.setNavigationBarColor(theme.bg);
+                w.setWindowAnimations(android.R.style.Animation_Dialog);
             }
-            return;
+            applyInsets(root);
         }
-        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
-        Uri selectedFile = data.getData();
-        if (requestCode == BACKUP_EXPORT_REQUEST) exportBackup(selectedFile);
-        else if (requestCode == BACKUP_IMPORT_REQUEST) importBackup(selectedFile);
+
+        TextView action(String label, Runnable r) {
+            TextView a = bold(label, 13, theme.accent);
+            a.setPadding(dp(12), dp(10), dp(12), dp(10));
+            a.setBackground(pressable(theme.surface, 14, 0));
+            onTap(a, r);
+            header.addView(a);
+            return a;
+        }
+
+        void show() { dialog.show(); }
+        void dismiss() { dialog.dismiss(); }
     }
 
-    private void exportBackup(Uri destination) {
-        try {
-            JSONObject backup = new JSONObject();
-            backup.put("format", "ASTER_BROWSER_BACKUP");
-            backup.put("version", 1);
-            backup.put("exported_at", System.currentTimeMillis());
-            backup.put("bookmarks", prefs.getString("bookmarks", ""));
-            backup.put("history", prefs.getString("history", ""));
-
-            JSONArray savedTabs = new JSONArray();
-            for (WebView tab : tabs) {
-                String url = HOME_PAGE.equals(tab.getTag()) ? HOME_PAGE : tab.getUrl();
-                if (url == null || (!HOME_PAGE.equals(url) && !isBackupWebUrl(url))) {
-                    url = HOME_PAGE.equals(tab.getTag()) ? HOME_PAGE : getHomepage();
-                }
-                savedTabs.put(url);
-            }
-            backup.put("session_tabs", savedTabs);
-            backup.put("active_tab", Math.max(0, Math.min(active, Math.max(0, tabs.size() - 1))));
-
-            JSONObject settings = new JSONObject();
-            settings.put("homepage", getHomepage());
-            settings.put("search_engine", prefs.getString("search_engine", "google"));
-            settings.put("restore_tabs", prefs.getBoolean("restore_tabs", true));
-            settings.put("shield_enabled", prefs.getBoolean("shield_enabled", true));
-            settings.put("shield_site_exceptions", prefs.getString("shield_site_exceptions", ""));
-            settings.put("desktop_site", prefs.getBoolean("desktop_site", false));
-            settings.put("text_zoom", prefs.getInt("text_zoom", 100));
-            settings.put("translate_language", prefs.getString("translate_language", "es"));
-            settings.put("home_show_branding", prefs.getBoolean("home_show_branding", true));
-            settings.put("home_show_shortcuts", prefs.getBoolean("home_show_shortcuts", true));
-            settings.put("home_show_bookmarks", prefs.getBoolean("home_show_bookmarks", true));
-            settings.put("home_theme", prefs.getString("home_theme", "violet"));
-            backup.put("settings", settings);
-
-            try (OutputStream output = getContentResolver().openOutputStream(destination, "w")) {
-                if (output == null) throw new IllegalStateException("Could not open the selected file");
-                output.write(backup.toString(2).getBytes("UTF-8"));
-                output.flush();
-            }
-            Toast.makeText(this, "ASTER backup exported", Toast.LENGTH_LONG).show();
-        } catch (Exception e) {
-            Toast.makeText(this, "Backup export failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
+    TextView sectionTitle(LinearLayout parent, String title) {
+        TextView s = bold(title.toUpperCase(Locale.ROOT), 11, theme.accent);
+        s.setLetterSpacing(0.12f);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = dp(18);
+        lp.bottomMargin = dp(6);
+        lp.leftMargin = dp(4);
+        parent.addView(s, lp);
+        return s;
     }
 
-    private void importBackup(Uri source) {
-        try {
-            byte[] bytes;
-            try (InputStream input = getContentResolver().openInputStream(source)) {
-                if (input == null) throw new IllegalStateException("Could not read the selected file");
-                bytes = readLimited(input, MAX_BACKUP_BYTES);
-            }
-
-            String json = new String(bytes, "UTF-8");
-            if (json.startsWith("\uFEFF")) json = json.substring(1);
-            JSONObject backup = new JSONObject(json);
-            if (!"ASTER_BROWSER_BACKUP".equals(backup.optString("format"))
-                || backup.optInt("version", -1) != 1) {
-                throw new IllegalArgumentException("This is not a supported ASTER backup");
-            }
-
-            JSONObject settings = backup.optJSONObject("settings");
-            JSONArray sourceTabs = backup.optJSONArray("session_tabs");
-            if (settings == null || sourceTabs == null) {
-                throw new IllegalArgumentException("The backup is missing required data");
-            }
-
-            String bookmarks = sanitizeUrlLines(backup.optString("bookmarks", ""));
-            String history = sanitizeUrlLines(backup.optString("history", ""));
-            String homepage = settings.optString("homepage", "https://www.google.com").trim();
-            if (!isBackupWebUrl(homepage)) homepage = "https://www.google.com";
-
-            String engine = settings.optString("search_engine", "google");
-            if (!"google".equals(engine) && !"duckduckgo".equals(engine) && !"bing".equals(engine)) {
-                engine = "google";
-            }
-
-            List<String> restoredTabs = new ArrayList<>();
-            for (int i = 0; i < sourceTabs.length() && restoredTabs.size() < MAX_TABS; i++) {
-                String url = sourceTabs.optString(i, "").trim();
-                if (HOME_PAGE.equals(url) || isBackupWebUrl(url)) restoredTabs.add(url);
-            }
-            if (restoredTabs.isEmpty()) restoredTabs.add(HOME_PAGE);
-
-            int restoredActive = Math.max(0, Math.min(
-                backup.optInt("active_tab", 0), restoredTabs.size() - 1
-            ));
-            JSONArray safeTabs = new JSONArray();
-            for (String url : restoredTabs) safeTabs.put(url);
-
-            String translateLanguage = settings.optString("translate_language", "es");
-            if (!java.util.Arrays.asList("es", "en", "sl", "ja", "ko", "fr", "de").contains(translateLanguage)) translateLanguage = "es";
-            String homeTheme = settings.optString("home_theme", "violet");
-            if (!java.util.Arrays.asList("violet", "midnight", "ocean", "crimson").contains(homeTheme)) homeTheme = "violet";
-            int textZoom = settings.optInt("text_zoom", 100);
-            if (textZoom != 85 && textZoom != 100 && textZoom != 115 && textZoom != 130 && textZoom != 150) textZoom = 100;
-
-            prefs.edit()
-                .putString("bookmarks", bookmarks)
-                .putString("history", history)
-                .putString("homepage", homepage)
-                .putString("search_engine", engine)
-                .putBoolean("restore_tabs", settings.optBoolean("restore_tabs", true))
-                .putBoolean("shield_enabled", settings.optBoolean("shield_enabled", true))
-                .putString("shield_site_exceptions", sanitizeHostLines(settings.optString("shield_site_exceptions", "")))
-                .putBoolean("desktop_site", settings.optBoolean("desktop_site", false))
-                .putInt("text_zoom", textZoom)
-                .putString("translate_language", translateLanguage)
-                .putBoolean("home_show_branding", settings.optBoolean("home_show_branding", true))
-                .putBoolean("home_show_shortcuts", settings.optBoolean("home_show_shortcuts", true))
-                .putBoolean("home_show_bookmarks", settings.optBoolean("home_show_bookmarks", true))
-                .putString("home_theme", homeTheme)
-                .putString("session_tabs", safeTabs.toString())
-                .putInt("active_tab", restoredActive)
-                .apply();
-
-            rebuildTabs(restoredTabs, restoredActive);
-            Toast.makeText(this, "Backup restored successfully", Toast.LENGTH_LONG).show();
-        } catch (Exception e) {
-            Toast.makeText(this, "Could not restore backup: " + e.getMessage(), Toast.LENGTH_LONG).show();
+    LinearLayout rowCard(LinearLayout parent, String title, String subtitle, Runnable click) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(14), dp(12), dp(12), dp(12));
+        row.setBackground(pressable(theme.surface, 14, 0));
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        texts.addView(text(title, 15, theme.text));
+        if (subtitle != null && !subtitle.isEmpty()) {
+            TextView sub = text(subtitle, 12, theme.muted);
+            sub.setPadding(0, dp(2), 0, 0);
+            texts.addView(sub);
         }
+        row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = dp(6);
+        parent.addView(row, lp);
+        if (click != null) onTap(row, click);
+        return row;
     }
 
-    private byte[] readLimited(InputStream input, int limit) throws Exception {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        byte[] buffer = new byte[8192];
-        int total = 0;
-        int count;
-        while ((count = input.read(buffer)) != -1) {
-            total += count;
-            if (total > limit) throw new IllegalArgumentException("Backup file is too large");
-            output.write(buffer, 0, count);
-        }
-        return output.toByteArray();
+    Switch switchRow(LinearLayout parent, String title, String subtitle, final String key, boolean def, final Runnable changed) {
+        LinearLayout row = rowCard(parent, title, subtitle, null);
+        final Switch sw = new Switch(this);
+        sw.setChecked(prefs.getBoolean(key, def));
+        sw.setThumbTintList(ColorStateList.valueOf(theme.accent));
+        sw.setTrackTintList(ColorStateList.valueOf(Theme.withAlpha(theme.accent, 110)));
+        row.addView(sw);
+        row.setOnClickListener(v -> sw.toggle());
+        sw.setOnCheckedChangeListener((b, checked) -> {
+            feedback(b);
+            prefs.edit().putBoolean(key, checked).apply();
+            if (changed != null) changed.run();
+        });
+        return sw;
     }
 
-    private String sanitizeHostLines(String raw) {
-        Set<String> safe = new LinkedHashSet<>();
-        if (raw != null) {
-            for (String line : raw.split("\\n")) {
-                String host = normalizedHost(line);
-                if (host != null && host.matches("[a-z0-9.-]+") && host.contains(".")) safe.add(host);
-                if (safe.size() >= 500) break;
-            }
-        }
-        StringBuilder result = new StringBuilder();
-        for (String host : safe) result.append(host).append('\n');
-        return result.toString();
-    }
-
-    private String sanitizeUrlLines(String raw) {
-        Set<String> safe = new LinkedHashSet<>();
-        if (raw == null) return "";
-        for (String line : raw.split("\\n")) {
-            String url = line.trim();
-            if (isBackupWebUrl(url)) safe.add(url);
-            if (safe.size() >= 5000) break;
-        }
-        StringBuilder result = new StringBuilder();
-        for (String url : safe) result.append(url).append('\n');
-        return result.toString();
-    }
-
-    private boolean isBackupWebUrl(String value) {
-        if (!isWebUrl(value) || value.length() > 2048) return false;
-        try {
-            Uri uri = Uri.parse(value);
-            String scheme = uri.getScheme();
-            return uri.getHost() != null
-                && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
-    private void rebuildTabs(List<String> urls, int selectedIndex) {
-        for (WebView tab : tabs) {
-            tab.stopLoading();
-            readerModeTabs.remove(tab);
-            topLevelHosts.remove(tab);
-            pageBlockedCounts.remove(tab);
-            webContainer.removeView(tab);
-            tab.destroy();
-        }
-        tabs.clear();
-        webContainer.removeAllViews();
-        active = 0;
-
-        for (int i = 0; i < urls.size() && i < MAX_TABS; i++) {
-            String url = urls.get(i);
-            addTab(HOME_PAGE.equals(url) ? HOME_PAGE : url);
-        }
-        if (tabs.isEmpty()) addTab(HOME_PAGE);
-        selectTab(Math.max(0, Math.min(selectedIndex, tabs.size() - 1)));
-    }
-
-    private void showStartPageCustomization() {
-        String[] options = {"ASTER logo and welcome text", "Quick access shortcuts", "Saved bookmarks"};
-        boolean[] selected = {
-            prefs.getBoolean("home_show_branding", true),
-            prefs.getBoolean("home_show_shortcuts", true),
-            prefs.getBoolean("home_show_bookmarks", true)
-        };
-        new AlertDialog.Builder(this)
-            .setTitle("Customize start page")
-            .setMultiChoiceItems(options, selected, (dialog, which, checked) -> selected[which] = checked)
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Next", (dialog, which) -> {
-                prefs.edit()
-                    .putBoolean("home_show_branding", selected[0])
-                    .putBoolean("home_show_shortcuts", selected[1])
-                    .putBoolean("home_show_bookmarks", selected[2])
-                    .apply();
-                refreshStartPages();
-                chooseStartPageTheme();
-            }).show();
-    }
-
-    private void chooseStartPageTheme() {
-        String[] themes = {"Violet (ASTER)", "Midnight", "Ocean", "Crimson"};
-        String[] values = {"violet", "midnight", "ocean", "crimson"};
-        String currentTheme = prefs.getString("home_theme", "violet");
-        int checked = 0;
-        for (int i = 0; i < values.length; i++) if (values[i].equals(currentTheme)) checked = i;
-        new AlertDialog.Builder(this).setTitle("Start page color")
-            .setSingleChoiceItems(themes, checked, (dialog, which) -> {
-                prefs.edit().putString("home_theme", values[which]).apply();
-                dialog.dismiss();
-                refreshStartPages();
-                Toast.makeText(this, "Start page updated", Toast.LENGTH_SHORT).show();
+    void choose(String title, final String[] labels, int checked, final ChoiceListener listener) {
+        new AlertDialog.Builder(this).setTitle(title)
+            .setSingleChoiceItems(labels, checked, (d, which) -> {
+                d.dismiss();
+                listener.onChoice(which);
             }).setNegativeButton("Cancel", null).show();
     }
 
-    private void refreshStartPages() {
-        for (WebView tab : tabs) {
-            if (HOME_PAGE.equals(tab.getTag())) loadStartPage(tab);
+    interface ChoiceListener { void onChoice(int which); }
+
+    private EditText input(String hint, String value) {
+        EditText e = new EditText(this);
+        e.setSingleLine(true);
+        e.setHint(hint);
+        e.setText(value == null ? "" : value);
+        e.setTextColor(theme.text);
+        e.setHintTextColor(theme.muted);
+        return e;
+    }
+
+    // ================================================================== layout
+
+    private void buildUi() {
+        getWindow().setStatusBarColor(theme.bg);
+        getWindow().setNavigationBarColor(theme.bg);
+        content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        setContentView(content);
+        applyInsets(content);
+
+        // ---- toolbar
+        toolbar = new LinearLayout(this);
+        toolbar.setGravity(Gravity.CENTER_VERTICAL);
+
+        FrameLayout shieldFrame = new FrameLayout(this);
+        shieldIcon = chromeButton("⛨", 19, "ASTER Shields");
+        shieldFrame.addView(shieldIcon, new FrameLayout.LayoutParams(-1, -1));
+        shieldBadge = bold("", 9, Color.WHITE);
+        shieldBadge.setGravity(Gravity.CENTER);
+        shieldBadge.setPadding(dp(4), 0, dp(4), 0);
+        shieldBadge.setMinWidth(dp(16));
+        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-2, dp(16), Gravity.TOP | Gravity.END);
+        bp.topMargin = dp(3);
+        bp.rightMargin = dp(1);
+        shieldFrame.addView(shieldBadge, bp);
+        onTap(shieldIcon, this::showShields);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(dp(44), dp(44));
+        sp.rightMargin = dp(6);
+        toolbar.addView(shieldFrame, sp);
+
+        address = new EditText(this);
+        address.setSingleLine(true);
+        address.setTextSize(15);
+        address.setHint(incognito ? "Search privately" : "Search or type URL");
+        address.setPadding(dp(16), 0, dp(12), 0);
+        address.setImeOptions(EditorInfo.IME_ACTION_GO | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        address.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        address.setSelectAllOnFocus(true);
+        if (Build.VERSION.SDK_INT >= 26) address.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        toolbar.addView(address, new LinearLayout.LayoutParams(0, dp(44), 1));
+        address.setOnEditorActionListener((v, action, ev) -> {
+            if (action == EditorInfo.IME_ACTION_GO || (ev != null && ev.getKeyCode() == KeyEvent.KEYCODE_ENTER && ev.getAction() == KeyEvent.ACTION_DOWN)) {
+                navigate(address.getText().toString());
+                return true;
+            }
+            return false;
+        });
+        address.setOnFocusChangeListener((v, focused) -> {
+            Tab t = current();
+            if (focused) {
+                address.setText(t == null || t.start ? "" : t.url);
+                address.selectAll();
+                updateSuggestions("");
+            } else {
+                suggestScroll.setVisibility(View.GONE);
+                updateAddress();
+            }
+        });
+        address.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void afterTextChanged(Editable s) {
+                if (address.hasFocus()) updateSuggestions(s.toString());
+            }
+        });
+
+        reloadBtn = chromeButton("↻", 21, "Reload");
+        onTap(reloadBtn, () -> {
+            Tab t = current();
+            if (t != null && t.loading && t.web != null) t.web.stopLoading(); else reload();
+        });
+        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(dp(42), dp(44));
+        rp.leftMargin = dp(4);
+        toolbar.addView(reloadBtn, rp);
+
+        tabsTop = chromeButton("1", 13, "Tabs");
+        tabsTop.setTypeface(Typeface.DEFAULT_BOLD);
+        onTap(tabsTop, this::showTabs);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(dp(40), dp(40));
+        tp.leftMargin = dp(4);
+        toolbar.addView(tabsTop, tp);
+
+        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);
+        progress.setVisibility(View.GONE);
+
+        // ---- web area with overlays
+        webArea = new FrameLayout(this);
+
+        pullIndicator = bold("↻", 22, Color.WHITE);
+        pullIndicator.setGravity(Gravity.CENTER);
+        pullIndicator.setVisibility(View.GONE);
+        pullIndicator.setElevation(dp(8));
+        FrameLayout.LayoutParams pp = new FrameLayout.LayoutParams(dp(46), dp(46), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        webArea.addView(pullIndicator, pp);
+
+        buildFindBar();
+        suggestScroll = new ScrollView(this);
+        suggestBox = new LinearLayout(this);
+        suggestBox.setOrientation(LinearLayout.VERTICAL);
+        suggestBox.setPadding(dp(8), dp(6), dp(8), dp(10));
+        suggestScroll.addView(suggestBox);
+        suggestScroll.setVisibility(View.GONE);
+        suggestScroll.setElevation(dp(12));
+        webArea.addView(suggestScroll, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
+
+        fab = new FabMenu(this);
+        webArea.addView(fab, new FrameLayout.LayoutParams(-1, -1));
+
+        // ---- bottom bar
+        bottomBar = new LinearLayout(this);
+        bottomBar.setGravity(Gravity.CENTER_VERTICAL);
+        backBtn = chromeButton("‹", 30, "Back");
+        forwardBtn = chromeButton("›", 30, "Forward");
+        newTabBtn = chromeButton("+", 26, "New tab");
+        tabsBottom = chromeButton("1", 13, "Tabs");
+        tabsBottom.setTypeface(Typeface.DEFAULT_BOLD);
+        menuBtn = chromeButton("⋮", 24, "Menu");
+        onTap(backBtn, this::goBack);
+        onTap(forwardBtn, this::goForward);
+        onTap(newTabBtn, () -> openInNewTab(null, false));
+        onTap(tabsBottom, this::showTabs);
+        onTap(menuBtn, this::showMenu);
+        newTabBtn.setOnLongClickListener(v -> { openPrivate(null); return true; });
+        tabsBottom.setOnLongClickListener(v -> { closeTab(active); return true; });
+        backBtn.setOnLongClickListener(v -> { showHistory(); return true; });
+        TextView[] items = {backBtn, forwardBtn, newTabBtn, tabsBottom, menuBtn};
+        for (TextView item : items) bottomBar.addView(item, new LinearLayout.LayoutParams(0, dp(46), 1));
+        applyTheme();
+        layoutChrome();
+    }
+
+    private void buildFindBar() {
+        findBar = new LinearLayout(this);
+        findBar.setGravity(Gravity.CENTER_VERTICAL);
+        findBar.setPadding(dp(8), dp(6), dp(6), dp(6));
+        findBar.setVisibility(View.GONE);
+        findBar.setElevation(dp(10));
+        findInput = new EditText(this);
+        findInput.setSingleLine(true);
+        findInput.setHint("Find in page");
+        findInput.setTextSize(14);
+        findInput.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+        findBar.addView(findInput, new LinearLayout.LayoutParams(0, dp(42), 1));
+        findCount = text("0/0", 12, Color.GRAY);
+        findCount.setPadding(dp(8), 0, dp(8), 0);
+        findBar.addView(findCount);
+        TextView up = chromeButton("⌃", 20, "Previous match");
+        TextView down = chromeButton("⌄", 20, "Next match");
+        TextView close = chromeButton("✕", 16, "Close find");
+        findBar.addView(up, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        findBar.addView(down, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        findBar.addView(close, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        up.setOnClickListener(v -> { Tab t = current(); if (t != null && t.web != null) t.web.findNext(false); });
+        down.setOnClickListener(v -> { Tab t = current(); if (t != null && t.web != null) t.web.findNext(true); });
+        close.setOnClickListener(v -> closeFind());
+        findInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void afterTextChanged(Editable s) {
+                Tab t = current();
+                if (t == null || t.web == null) return;
+                if (s.length() == 0) { t.web.clearMatches(); findCount.setText("0/0"); }
+                else t.web.findAllAsync(s.toString());
+            }
+        });
+        findInput.setOnEditorActionListener((v, a, e) -> {
+            Tab t = current();
+            if (t != null && t.web != null) t.web.findNext(true);
+            return true;
+        });
+        webArea.addView(findBar, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
+    }
+
+    private boolean fabMode() { return "fab".equals(prefs.getString("nav_style", "bar")); }
+    private boolean addressBottom() { return "bottom".equals(prefs.getString("address_position", "top")); }
+
+    /** Places toolbar / bottom bar according to navigation preferences and screen width. */
+    private void layoutChrome() {
+        content.removeAllViews();
+        boolean fabOn = fabMode();
+        boolean bottom = addressBottom();
+        boolean wide = getResources().getConfiguration().screenWidthDp >= 600;
+        int side = dp(wide ? 18 : 8);
+        toolbar.setPadding(side, dp(7), side, dp(7));
+        bottomBar.setPadding(dp(wide ? 60 : 4), dp(4), dp(wide ? 60 : 4), dp(6));
+        tabsTop.setVisibility(fabOn || wide ? View.VISIBLE : View.GONE);
+        if (!bottom) {
+            content.addView(toolbar, new LinearLayout.LayoutParams(-1, -2));
+            content.addView(progress, new LinearLayout.LayoutParams(-1, dp(2)));
+            content.addView(webArea, new LinearLayout.LayoutParams(-1, 0, 1));
+        } else {
+            content.addView(webArea, new LinearLayout.LayoutParams(-1, 0, 1));
+            content.addView(progress, new LinearLayout.LayoutParams(-1, dp(2)));
+            content.addView(toolbar, new LinearLayout.LayoutParams(-1, -2));
+        }
+        if (!fabOn) content.addView(bottomBar, new LinearLayout.LayoutParams(-1, -2));
+        fab.setVisibility(fabOn ? View.VISIBLE : View.GONE);
+        FrameLayout.LayoutParams sl = (FrameLayout.LayoutParams) suggestScroll.getLayoutParams();
+        sl.gravity = bottom ? Gravity.BOTTOM : Gravity.TOP;
+        suggestScroll.setLayoutParams(sl);
+        if (fabOn) setupFab();
+    }
+
+    private void setupFab() {
+        List<FabMenu.Item> items = new ArrayList<>();
+        items.add(new FabMenu.Item("‹", "Back", this::goBack));
+        items.add(new FabMenu.Item("+", "New tab", () -> openInNewTab(null, false)));
+        items.add(new FabMenu.Item("🔍", "Search", () -> { address.requestFocus(); showKeyboard(address); }));
+        items.add(new FabMenu.Item("▦", "Tabs", this::showTabs));
+        items.add(new FabMenu.Item("⛨", "Shields", this::showShields));
+        items.add(new FabMenu.Item("⚡", "GX Control", this::showGxControl));
+        items.add(new FabMenu.Item("☰", "Menu", this::showMenu));
+        fab.setup(theme, items, new FabMenu.Gestures() {
+            @Override public void swipeLeft() { goBack(); }
+            @Override public void swipeRight() { goForward(); }
+            @Override public void swipeUp() { showTabs(); }
+            @Override public void longPress() { openInNewTab(null, false); }
+            @Override public void feedback() { MainActivity.this.feedback(null); }
+        });
+    }
+
+    private void applyTheme() {
+        getWindow().setStatusBarColor(theme.bg);
+        getWindow().setNavigationBarColor(theme.bg);
+        content.setBackgroundColor(theme.bg);
+        int barBg = incognito ? Color.rgb(24, 14, 40) : (theme.glass ? Color.rgb(16, 24, 40) : theme.bg);
+        toolbar.setBackgroundColor(barBg);
+        bottomBar.setBackgroundColor(barBg);
+        address.setTextColor(theme.text);
+        address.setHintTextColor(theme.muted);
+        address.setBackground(shape(incognito ? Color.rgb(44, 26, 70) : theme.surface, 22, Theme.withAlpha(theme.accent, 45)));
+        TextView[] icons = {shieldIcon, reloadBtn, backBtn, forwardBtn, menuBtn};
+        for (TextView t : icons) {
+            t.setTextColor(theme.text);
+            t.setBackground(pressable(Color.TRANSPARENT, 14, 0));
+        }
+        newTabBtn.setTextColor(Color.WHITE);
+        GradientDrawable plus = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{theme.accent, theme.accent2});
+        plus.setCornerRadius(dp(16));
+        newTabBtn.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(80, 255, 255, 255)), plus, null));
+        LinearLayout.LayoutParams np = (LinearLayout.LayoutParams) newTabBtn.getLayoutParams();
+        if (np != null) { np.setMargins(dp(10), dp(1), dp(10), dp(1)); newTabBtn.setLayoutParams(np); }
+        for (TextView t : new TextView[]{tabsTop, tabsBottom}) {
+            t.setTextColor(theme.text);
+            GradientDrawable box = shape(Color.TRANSPARENT, 7, theme.text);
+            box.setStroke(dp(2), theme.text);
+            t.setBackground(new android.graphics.drawable.InsetDrawable(box, dp(9), dp(11), dp(9), dp(11)));
+        }
+        shieldBadge.setBackground(shape(theme.accent, 8, 0));
+        progress.setProgressTintList(ColorStateList.valueOf(theme.accent));
+        progress.setProgressBackgroundTintList(ColorStateList.valueOf(barBg));
+        suggestScroll.setBackground(shape(theme.glass ? Color.rgb(18, 26, 44) : theme.bg, 0, 0));
+        findBar.setBackgroundColor(theme.surface);
+        findInput.setTextColor(theme.text);
+        findInput.setHintTextColor(theme.muted);
+        findCount.setTextColor(theme.muted);
+        for (int i = 0; i < findBar.getChildCount(); i++) {
+            View c = findBar.getChildAt(i);
+            if (c instanceof TextView && !(c instanceof EditText) && c != findCount) ((TextView) c).setTextColor(theme.text);
+        }
+        GradientDrawable pull = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{theme.accent, theme.accent2});
+        pull.setShape(GradientDrawable.OVAL);
+        pullIndicator.setBackground(pull);
+        if (fabMode()) setupFab();
+        refreshShieldChrome();
+    }
+
+    void setTheme(Theme t) {
+        theme = t;
+        prefs.edit().putString("ui_theme", t.id).apply();
+        applyTheme();
+        refreshStartPages();
+        toast(t.name + " applied");
+    }
+
+    // ================================================================== tabs
+
+    Tab current() { return active >= 0 && active < tabs.size() ? tabs.get(active) : null; }
+
+    void openInNewTab(String url, boolean background) {
+        if (tabs.size() >= MAX_TABS) {
+            toast("Tab limit reached — close some tabs first");
+            if (url != null && current() != null) load(current(), url);
+            return;
+        }
+        Tab t = new Tab(url == null ? START : url);
+        t.start = url == null;
+        t.desktop = prefs.getBoolean("desktop_default", false);
+        int index = background && active >= 0 ? active + 1 : tabs.size();
+        tabs.add(index, t);
+        if (background && active >= index) active++;
+        if (sounds != null) sounds.open();
+        if (background) {
+            createWeb(t);
+            if (t.start) loadStart(t); else load(t, t.url);
+            t.web.setVisibility(View.GONE);
+            t.web.onPause();
+            toast("Opened in background");
+            enforceLimit();
+            updateTabCount();
+        } else {
+            select(index);
+        }
+        saveSession();
+    }
+
+    void select(int index) {
+        if (index < 0 || index >= tabs.size()) return;
+        Tab old = current();
+        if (old != null && old.web != null && index != active) {
+            captureThumb(old);
+            old.web.setVisibility(View.GONE);
+            old.web.onPause();
+        }
+        active = index;
+        Tab t = tabs.get(index);
+        t.lastUsed = System.currentTimeMillis();
+        if (t.web == null) {
+            createWeb(t);
+            if (t.start || !Store.isWeb(t.url)) loadStart(t); else load(t, t.url);
+        } else if (t.start) {
+            loadStart(t);
+        }
+        t.web.setVisibility(View.VISIBLE);
+        t.web.onResume();
+        if (findBar.getVisibility() == View.VISIBLE) closeFind();
+        enforceLimit();
+        updateChrome();
+    }
+
+    void closeTab(int index) {
+        if (index < 0 || index >= tabs.size()) return;
+        Tab t = tabs.remove(index);
+        destroyWeb(t);
+        if (sounds != null) sounds.close();
+        if (tabs.isEmpty()) {
+            active = -1;
+            openInNewTab(null, false);
+            return;
+        }
+        int target;
+        if (index == active) target = Math.min(index, tabs.size() - 1);
+        else if (index < active) target = active - 1;
+        else target = active;
+        active = -1;
+        select(Math.max(0, target));
+        saveSession();
+    }
+
+    void closeAllTabs() {
+        for (Tab t : tabs) destroyWeb(t);
+        tabs.clear();
+        active = -1;
+        openInNewTab(null, false);
+    }
+
+    private void destroyWeb(Tab t) {
+        if (t.web == null) return;
+        AsterWebView w = t.web;
+        t.web = null;
+        try {
+            w.stopLoading();
+            webArea.removeView(w);
+            w.setListener(null);
+            w.destroy();
+        } catch (Exception ignored) { }
+    }
+
+    /** Puts a tab to sleep: the WebView is released and only URL/title/thumbnail remain. */
+    void sleepTab(Tab t) {
+        if (t.web == null || t == current()) return;
+        if (!t.start && t.web.getUrl() != null && Store.isWeb(t.web.getUrl())) t.url = t.web.getUrl();
+        destroyWeb(t);
+    }
+
+    int liveTabs() {
+        int n = 0;
+        for (Tab t : tabs) if (t.web != null) n++;
+        return n;
+    }
+
+    /** GX RAM limiter: keeps only the most recently used tabs alive. */
+    private void enforceLimit() {
+        int max = prefs.getBoolean("gx_ram_limiter", true) ? Math.max(1, prefs.getInt("gx_max_live", 5)) : 16;
+        if (liveTabs() <= max) return;
+        List<Tab> live = new ArrayList<>();
+        for (Tab t : tabs) if (t.web != null && t != current()) live.add(t);
+        Collections.sort(live, new Comparator<Tab>() {
+            @Override public int compare(Tab a, Tab b) { return Long.compare(a.lastUsed, b.lastUsed); }
+        });
+        int i = 0;
+        while (liveTabs() > max && i < live.size()) sleepTab(live.get(i++));
+    }
+
+    private void captureThumb(Tab t) {
+        if (t == null || t.web == null) return;
+        try {
+            int w = t.web.getWidth();
+            int h = t.web.getHeight();
+            if (w <= 0 || h <= 0) return;
+            float scale = 0.4f;
+            Bitmap b = Bitmap.createBitmap(Math.max(1, (int) (w * scale)), Math.max(1, (int) (Math.min(h, w * 1.3f) * scale)), Bitmap.Config.RGB_565);
+            Canvas c = new Canvas(b);
+            c.scale(scale, scale);
+            c.translate(-t.web.getScrollX(), -t.web.getScrollY());
+            t.web.draw(c);
+            t.thumbnail = b;
+        } catch (Throwable ignored) { }
+    }
+
+    private void saveSession() {
+        if (incognito || store == null) return;
+        try {
+            JSONObject s = new JSONObject();
+            JSONArray a = new JSONArray();
+            for (Tab t : tabs) {
+                JSONObject o = new JSONObject();
+                String url = t.start ? START : (t.web != null && Store.isWeb(t.web.getUrl()) ? t.web.getUrl() : t.url);
+                o.put("u", url);
+                o.put("t", t.title == null ? "" : t.title);
+                o.put("d", t.desktop);
+                a.put(o);
+            }
+            s.put("tabs", a);
+            s.put("active", Math.max(0, active));
+            store.saveSession(s);
+        } catch (Exception ignored) { }
+    }
+
+    private boolean restoreSession() {
+        JSONObject s = store.loadSession();
+        if (s == null) return false;
+        JSONArray a = s.optJSONArray("tabs");
+        if (a == null || a.length() == 0) return false;
+        for (int i = 0; i < a.length() && tabs.size() < MAX_TABS; i++) {
+            JSONObject o = a.optJSONObject(i);
+            if (o == null) continue;
+            String url = o.optString("u", START);
+            Tab t = new Tab(url);
+            t.start = !Store.isWeb(url);
+            if (t.start) t.url = START;
+            t.title = o.optString("t", "");
+            t.desktop = o.optBoolean("d", false);
+            tabs.add(t);
+        }
+        if (tabs.isEmpty()) return false;
+        select(Math.max(0, Math.min(s.optInt("active", 0), tabs.size() - 1)));
+        return true;
+    }
+
+    // ================================================================== WebView setup
+
+    private String userAgent(boolean desktop) {
+        String ua = WebSettings.getDefaultUserAgent(this);
+        String chrome = "Chrome/124.0.0.0";
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("Chrome/[0-9.]+").matcher(ua);
+        if (m.find()) chrome = m.group();
+        if (desktop) return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) " + chrome + " Safari/537.36";
+        // Present as a regular mobile browser: some sites refuse sign-in inside embedded "wv" WebViews.
+        return ua.replace("; wv)", ")").replaceFirst(" Version/\\d+(\\.\\d+)*", "");
+    }
+
+    private void applySettings(Tab t) {
+        if (t.web == null) return;
+        WebSettings s = t.web.getSettings();
+        s.setUserAgentString(userAgent(t.desktop));
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(true);
+        s.setTextZoom(prefs.getInt("text_zoom", 100));
+        s.setBlockNetworkImage(prefs.getBoolean("data_saver", false));
+        boolean night = prefs.getBoolean("night_mode", false);
+        if (Build.VERSION.SDK_INT >= 33) {
+            s.setAlgorithmicDarkeningAllowed(night);
+        } else if (Build.VERSION.SDK_INT >= 29) {
+            applyForceDark(s, night);
+        }
+        t.web.setPullEnabled(prefs.getBoolean("pull_refresh", true));
+    }
+
+    @SuppressWarnings("deprecation")
+    private void applyForceDark(WebSettings s, boolean night) {
+        s.setForceDark(night ? WebSettings.FORCE_DARK_ON : WebSettings.FORCE_DARK_OFF);
+    }
+
+    private void applyAllSettings() {
+        for (Tab t : tabs) applySettings(t);
+    }
+
+    private void createWeb(final Tab t) {
+        final AsterWebView w = new AsterWebView(this);
+        t.web = w;
+        w.tab = t;
+        w.setListener(this);
+        w.setBackgroundColor(t.start ? theme.bg : Color.WHITE);
+        WebSettings s = w.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setSupportZoom(true);
+        s.setBuiltInZoomControls(true);
+        s.setDisplayZoomControls(false);
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(false);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        s.setSupportMultipleWindows(true);
+        s.setJavaScriptCanOpenWindowsAutomatically(false);
+        s.setMediaPlaybackRequiresUserGesture(true);
+        if (Build.VERSION.SDK_INT >= 26) s.setSafeBrowsingEnabled(true);
+        applySettings(t);
+        CookieManager.getInstance().setAcceptCookie(true);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(w, false);
+        w.setDownloadListener((url, agent, disposition, mime, length) -> confirmDownload(url, agent, disposition, mime));
+        w.setFindListener((activeMatch, matches, done) -> {
+            if (t == current()) findCount.setText(matches == 0 ? "0/0" : (activeMatch + 1) + "/" + matches);
+        });
+        w.setOnLongClickListener(v -> onWebLongPress(t));
+        w.setWebChromeClient(new Chrome(t));
+        w.setWebViewClient(new Client(t));
+        webArea.addView(w, 0, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    private final class Chrome extends WebChromeClient {
+        private final Tab t;
+        Chrome(Tab t) { this.t = t; }
+
+        @Override public void onProgressChanged(WebView view, int p) {
+            t.progress = p;
+            if (t == current()) {
+                progress.setVisibility(p >= 100 ? View.GONE : View.VISIBLE);
+                progress.setProgress(p);
+            }
+        }
+
+        @Override public void onReceivedTitle(WebView view, String title) {
+            if (t.start) return;
+            t.title = title;
+            store.updateHistoryTitle(view.getUrl(), title);
+        }
+
+        @Override public void onReceivedIcon(WebView view, Bitmap icon) { t.favicon = icon; }
+
+        @Override public void onShowCustomView(View view, CustomViewCallback callback) { enterFullscreen(view, callback); }
+
+        @Override public void onHideCustomView() { exitFullscreen(); }
+
+        @Override public boolean onCreateWindow(WebView view, boolean isDialog, boolean userGesture, Message resultMsg) {
+            if (!userGesture && shields.shieldsUp(t.topHost)) {
+                toast("Pop-up blocked");
+                return false;
+            }
+            if (tabs.size() >= MAX_TABS) return false;
+            Tab child = new Tab(START);
+            child.start = false;
+            child.desktop = t.desktop;
+            int index = tabs.indexOf(t) + 1;
+            tabs.add(index, child);
+            if (active >= index) active++;
+            createWeb(child);
+            WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+            transport.setWebView(child.web);
+            resultMsg.sendToTarget();
+            select(index);
+            return true;
+        }
+
+        @Override public void onCloseWindow(WebView window) {
+            int i = tabs.indexOf(t);
+            if (i >= 0) closeTab(i);
+        }
+
+        @Override public void onPermissionRequest(PermissionRequest request) { runOnUiThread(() -> promptMedia(request)); }
+
+        @Override public void onPermissionRequestCanceled(PermissionRequest request) {
+            if (request == pendingMedia) { pendingMedia = null; pendingMediaOrigin = null; pendingMediaResources = null; }
+        }
+
+        @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+            runOnUiThread(() -> promptLocation(origin, callback));
+        }
+
+        @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+            if (fileCallback != null) fileCallback.onReceiveValue(null);
+            fileCallback = callback;
+            try {
+                startActivityForResult(params.createIntent(), REQ_FILE);
+                return true;
+            } catch (Exception e) {
+                fileCallback = null;
+                toast("No file picker available");
+                return false;
+            }
         }
     }
 
-    private void showSettings() {
-        String homepage = getHomepage();
-        String[] items = {
-            "Search engine: " + getSearchEngineName(),
-            "Homepage: " + homepage,
-            "Customize start page",
-            "Interface theme: " + currentThemeName(),
-            "Manage site permissions",
-            "Desktop site: " + (prefs.getBoolean("desktop_site", false) ? "On" : "Off"),
-            "Text size: " + prefs.getInt("text_zoom", 100) + "%",
-            "Translation language: " + translationLanguageName(prefs.getString("translate_language", "es")),
-            "Restore tabs on startup: " + (prefs.getBoolean("restore_tabs", true) ? "On" : "Off"),
-            "Check for updates",
-            "About ASTER Browser"
+    private final class Client extends WebViewClient {
+        private final Tab t;
+        Client(Tab t) { this.t = t; }
+
+        @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            Uri uri = request.getUrl();
+            String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+            if ("aster".equals(scheme)) {
+                if (t.start) handleAsterAction(uri);
+                return true;
+            }
+            if ("http".equals(scheme)) {
+                if (request.isForMainFrame()) {
+                    load(t, "https://" + uri.toString().substring(7));
+                    return true;
+                }
+                return false;
+            }
+            if ("https".equals(scheme)) {
+                if (request.isForMainFrame()) {
+                    boolean noJs = shields.blockScripts(uri.getHost());
+                    if (view.getSettings().getJavaScriptEnabled() == noJs) {
+                        view.getSettings().setJavaScriptEnabled(!noJs);
+                    }
+                    if (t.start) t.start = false;
+                }
+                return false;
+            }
+            if ("about".equals(scheme) || "data".equals(scheme) || "blob".equals(scheme) || "javascript".equals(scheme)) return false;
+            openExternal(uri.toString());
+            return true;
+        }
+
+        @Override public void onPageStarted(WebView view, String url, Bitmap favicon) {
+            boolean isStart = url != null && url.startsWith(START);
+            t.start = isStart;
+            t.reader = t.readerPending;
+            t.readerPending = false;
+            t.loading = true;
+            t.favicon = favicon;
+            if (!isStart && url != null && !url.startsWith("data:")) {
+                if (!url.equals(t.url)) t.title = "";
+                t.url = url;
+            }
+            t.topHost = isStart ? "aster.start" : ShieldEngine.normalize(Uri.parse(url == null ? "" : url).getHost());
+            t.resetCounters();
+            view.setBackgroundColor(isStart ? theme.bg : Color.WHITE);
+            if (!isStart && t.topHost != null) {
+                if (shields.blockFingerprinting(t.topHost)) view.evaluateJavascript(Scripts.fingerprint(fpSeed + t.topHost.hashCode()), null);
+                if (prefs.getBoolean("background_play", false)) view.evaluateJavascript(Scripts.backgroundPlay(), null);
+            }
+            if (t == current()) updateChrome();
+        }
+
+        @Override public void onPageCommitVisible(WebView view, String url) {
+            injectPageScripts(t, view, url);
+        }
+
+        @Override public void onPageFinished(WebView view, String url) {
+            t.loading = false;
+            injectPageScripts(t, view, url);
+            if (!t.start && !t.reader && Store.isWeb(url)) {
+                store.addHistory(t.title, url);
+                t.url = url;
+            }
+            if (t == current()) updateChrome();
+            saveSession();
+        }
+
+        @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+            if (request.isForMainFrame()) return null;
+            Uri uri = request.getUrl();
+            String host = uri.getHost();
+            if (host == null) return null;
+            int verdict = shields.classify(host, t.topHost);
+            if (verdict == 0) return null;
+            t.recordBlocked(host.toLowerCase(Locale.ROOT), verdict == 2);
+            // Runs on a WebView IO thread: never touch the tab list here, just schedule a UI refresh.
+            if (badgePending.compareAndSet(false, true)) {
+                ui.postDelayed(() -> { badgePending.set(false); refreshShieldChrome(); }, 250);
+            }
+            return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
+        }
+
+        @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+            handler.cancel();
+            if (t == current()) toast("ASTER blocked a page with an invalid security certificate");
+        }
+
+        @Override public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+            // The renderer crashed or was killed to free memory: drop this WebView and reload lazily.
+            boolean wasActive = t == current();
+            destroyWeb(t);
+            if (wasActive) {
+                active = -1;
+                select(tabs.indexOf(t));
+                toast("Page reloaded after the renderer stopped");
+            }
+            return true;
+        }
+    }
+
+    private void injectPageScripts(Tab t, WebView view, String url) {
+        if (t.start || url == null || !Store.isWeb(url)) return;
+        String host = ShieldEngine.normalize(Uri.parse(url).getHost());
+        if (host == null) return;
+        if (shields.cosmetic(host)) {
+            view.evaluateJavascript(Scripts.style("__aster_shields", shields.cosmeticCss(host)), null);
+            if (host.endsWith("youtube.com") || host.endsWith("youtube-nocookie.com")) view.evaluateJavascript(Scripts.youtube(), null);
+        }
+        if (prefs.getBoolean("night_mode", false) && Build.VERSION.SDK_INT < 29) {
+            view.evaluateJavascript(Scripts.style("__aster_night", Scripts.nightCss()), null);
+        }
+        if (prefs.getBoolean("background_play", false)) view.evaluateJavascript(Scripts.backgroundPlay(), null);
+    }
+
+    // ================================================================== pull to refresh / scroll
+
+    @Override public void onPull(AsterWebView view, float distance, boolean released) {
+        if (view.tab != current()) return;
+        float trigger = dp(120);
+        if (released) {
+            if (distance >= trigger) {
+                pullIndicator.animate().rotationBy(360).setDuration(500).withEndAction(this::hidePull).start();
+                feedback(view);
+                reload();
+            } else hidePull();
+            return;
+        }
+        pullIndicator.setVisibility(View.VISIBLE);
+        float y = Math.min(distance * 0.45f, dp(90)) - dp(46);
+        pullIndicator.setTranslationY(y);
+        pullIndicator.setRotation(distance * 0.6f);
+        pullIndicator.setAlpha(Math.min(1f, distance / trigger));
+        pullIndicator.setScaleX(distance >= trigger ? 1.1f : 0.9f);
+        pullIndicator.setScaleY(distance >= trigger ? 1.1f : 0.9f);
+    }
+
+    private void hidePull() {
+        pullIndicator.animate().alpha(0f).translationY(-dp(46)).setDuration(160)
+            .withEndAction(() -> pullIndicator.setVisibility(View.GONE)).start();
+    }
+
+    @Override public void onScrollDirection(AsterWebView view, boolean down) {
+        if (view.tab != current() || fab == null) return;
+        if (fabMode()) fab.setFabVisible(!down);
+    }
+
+    // ================================================================== navigation
+
+    String resolveInput(String raw) {
+        String v = raw.trim();
+        if (v.isEmpty()) return null;
+        if (v.matches("(?i)^https?://.*")) return v.replaceFirst("(?i)^http://", "https://");
+        if (v.matches("(?i)^(about|data|file|javascript|intent|chrome):.*")) return null;
+        if (!v.contains(" ") && (v.matches("(?i)^[a-z0-9.-]+\\.[a-z]{2,}(:[0-9]+)?(/.*)?$") || v.matches("^localhost(:[0-9]+)?(/.*)?$"))) {
+            return "https://" + v;
+        }
+        return StartPage.searchUrl(prefs.getString("search_engine", "brave"), v);
+    }
+
+    /** Like {@link #resolveInput} but returns null instead of turning plain text into a search. */
+    String webAddressOnly(String raw) {
+        String v = raw == null ? "" : raw.trim();
+        String u = resolveInput(v);
+        if (u == null || !Store.isWeb(u)) return null;
+        if (u.equals(StartPage.searchUrl(prefs.getString("search_engine", "brave"), v))) return null;
+        return u;
+    }
+
+    void navigate(String raw) {
+        String url = resolveInput(raw);
+        if (url == null) return;
+        address.clearFocus();
+        hideKeyboard();
+        Tab t = current();
+        if (t == null) { openInNewTab(url, false); return; }
+        load(t, url);
+    }
+
+    void load(Tab t, String url) {
+        if (t.web == null) createWeb(t);
+        t.start = false;
+        t.url = url;
+        boolean noJs = shields.blockScripts(Uri.parse(url).getHost());
+        t.web.getSettings().setJavaScriptEnabled(!noJs);
+        t.web.setBackgroundColor(Color.WHITE);
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Sec-GPC", "1");
+        headers.put("DNT", "1");
+        t.web.loadUrl(url, headers);
+        if (t == current()) updateChrome();
+    }
+
+    void loadStart(Tab t) {
+        if (t.web == null) createWeb(t);
+        t.start = true;
+        t.url = START;
+        t.title = "";
+        t.web.getSettings().setJavaScriptEnabled(true);
+        t.web.setBackgroundColor(theme.bg);
+        String html = StartPage.build(theme, prefs, store, shields, incognito, prefs.getString("gx_corner_cache", ""));
+        t.web.loadDataWithBaseURL(START, html, "text/html", "UTF-8", START);
+        if (t == current()) updateChrome();
+    }
+
+    void refreshStartPages() {
+        for (Tab t : tabs) if (t.start && t.web != null) loadStart(t);
+    }
+
+    private void reload() {
+        Tab t = current();
+        if (t == null || t.web == null) return;
+        if (t.start) loadStart(t); else t.web.reload();
+    }
+
+    private void goBack() {
+        Tab t = current();
+        if (t != null && t.web != null && t.web.canGoBack()) t.web.goBack();
+        else if (t != null && !t.start) loadStart(t);
+    }
+
+    private void goForward() {
+        Tab t = current();
+        if (t != null && t.web != null && t.web.canGoForward()) t.web.goForward();
+    }
+
+    private void openExternal(String url) {
+        try {
+            Intent intent;
+            if (url.startsWith("intent:")) {
+                intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+                intent.addCategory(Intent.CATEGORY_BROWSABLE);
+                intent.setComponent(null);
+                intent.setSelector(null);
+                try {
+                    startActivity(intent);
+                } catch (ActivityNotFoundException e) {
+                    String fallback = intent.getStringExtra("browser_fallback_url");
+                    if (Store.isWeb(fallback) && current() != null) load(current(), fallback);
+                    else toast("No app can open this link");
+                }
+                return;
+            }
+            intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.addCategory(Intent.CATEGORY_BROWSABLE);
+            startActivity(intent);
+        } catch (Exception e) {
+            toast("No app can open this link");
+        }
+    }
+
+    void openPrivate(String url) {
+        if (incognito) { openInNewTab(url, false); return; }
+        if (Build.VERSION.SDK_INT < 28) { toast("Private windows need Android 9 or newer"); return; }
+        Intent i = new Intent(this, PrivateActivity.class);
+        if (url != null) { i.setAction(Intent.ACTION_VIEW); i.setData(Uri.parse(url)); }
+        startActivity(i);
+    }
+
+    private void handleAsterAction(Uri uri) {
+        String host = uri.getHost() == null ? "" : uri.getHost();
+        String path = uri.getPath() == null ? "" : uri.getPath();
+        switch (host) {
+            case "dial":
+                if ("/add".equals(path)) editDial(-1);
+                else if ("/edit".equals(path)) {
+                    try { editDial(Integer.parseInt(uri.getQueryParameter("i"))); } catch (Exception ignored) { }
+                } else showDialManager();
+                break;
+            case "voice": startVoice(); break;
+            case "customize": showStartCustomization(); break;
+            case "shields": showShields(); break;
+            case "bookmarks": showBookmarks(); break;
+            case "gxcorner": refreshGxCorner(true); break;
+            default: break;
+        }
+    }
+
+    // ================================================================== chrome state
+
+    private void updateChrome() {
+        Tab t = current();
+        if (t == null) return;
+        updateAddress();
+        progress.setVisibility(t.loading && t.progress < 100 ? View.VISIBLE : View.GONE);
+        progress.setProgress(t.progress);
+        reloadBtn.setText(t.loading ? "✕" : "↻");
+        boolean canBack = t.web != null && (t.web.canGoBack() || !t.start);
+        boolean canFwd = t.web != null && t.web.canGoForward();
+        backBtn.setAlpha(canBack ? 1f : 0.35f);
+        forwardBtn.setAlpha(canFwd ? 1f : 0.35f);
+        updateTabCount();
+        refreshShieldChrome();
+    }
+
+    private void updateAddress() {
+        if (address.hasFocus()) return;
+        Tab t = current();
+        if (t == null || t.start) { address.setText(""); return; }
+        String url = t.web != null && t.web.getUrl() != null && !t.reader ? t.web.getUrl() : t.url;
+        String shown = url == null ? "" : url.replaceFirst("^https://(www\\.)?", "");
+        if (shown.endsWith("/")) shown = shown.substring(0, shown.length() - 1);
+        if (t.reader) shown = "📖 " + shown;
+        address.setText(shown);
+    }
+
+    private void updateTabCount() {
+        String n = tabs.size() > 99 ? ":D" : String.valueOf(tabs.size());
+        tabsTop.setText(n);
+        tabsBottom.setText(n);
+    }
+
+    private void refreshShieldChrome() {
+        if (shieldIcon == null) return;
+        Tab t = current();
+        String host = t == null || t.start ? null : t.topHost;
+        boolean up = shields.shieldsUp(host);
+        shieldIcon.setTextColor(up ? theme.accent : theme.muted);
+        int n = t == null ? 0 : t.blocked();
+        shieldBadge.setText(n > 99 ? "99+" : String.valueOf(n));
+        shieldBadge.setVisibility(n > 0 && up ? View.VISIBLE : View.GONE);
+    }
+
+    // ================================================================== suggestions
+
+    private void updateSuggestions(final String q) {
+        suggestBox.removeAllViews();
+        final String query = q.trim();
+        final int seq = ++suggestSeq;
+        if (query.isEmpty()) {
+            addClipboardSuggestion();
+            suggestScroll.setVisibility(suggestBox.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+            return;
+        }
+        String resolved = resolveInput(query);
+        boolean looksUrl = resolved != null && !resolved.equals(StartPage.searchUrl(prefs.getString("search_engine", "brave"), query));
+        if (looksUrl) addSuggestion("↗", query, "Go to site", () -> navigate(query));
+        else addSuggestion("🔍", query, "Search " + StartPage.engineName(prefs.getString("search_engine", "brave")), () -> navigate(query));
+        for (final Store.Entry e : store.suggest(query, 4)) {
+            addSuggestion(store.isBookmarked(e.url) ? "★" : "🕘", e.label(), Store.hostOf(e.url), () -> navigate(e.url));
+        }
+        suggestScroll.setVisibility(View.VISIBLE);
+        if (!prefs.getBoolean("suggestions", !incognito) || looksUrl) return;
+        ui.postDelayed(() -> {
+            if (seq != suggestSeq) return;
+            new Thread(() -> {
+                final List<String> remote = fetchSuggestions(query);
+                ui.post(() -> {
+                    if (seq != suggestSeq || !address.hasFocus()) return;
+                    int added = 0;
+                    for (final String s : remote) {
+                        if (s.equalsIgnoreCase(query) || added >= 6) continue;
+                        addSuggestion("🔍", s, null, () -> navigate(s));
+                        added++;
+                    }
+                });
+            }, "ASTER-suggest").start();
+        }, 170);
+    }
+
+    private void addClipboardSuggestion() {
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (cm == null || !cm.hasPrimaryClip() || cm.getPrimaryClip() == null || cm.getPrimaryClip().getItemCount() == 0) return;
+            CharSequence clip = cm.getPrimaryClip().getItemAt(0).getText();
+            if (clip == null) return;
+            final String c = clip.toString().trim();
+            if (c.isEmpty() || c.length() > 400) return;
+            addSuggestion("📋", c.length() > 60 ? c.substring(0, 60) + "…" : c, "Paste and go", () -> navigate(c));
+        } catch (Exception ignored) { }
+    }
+
+    private List<String> fetchSuggestions(String q) {
+        List<String> out = new ArrayList<>();
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(StartPage.suggestUrl(prefs.getString("search_engine", "brave"), q)).openConnection();
+            c.setConnectTimeout(3000);
+            c.setReadTimeout(3000);
+            c.setRequestProperty("Accept", "application/json");
+            if (c.getResponseCode() != 200) return out;
+            String body = new String(Store.readAll(c.getInputStream(), 256 * 1024), "UTF-8");
+            Object v = new JSONTokener(body).nextValue();
+            if (v instanceof JSONArray) {
+                JSONArray arr = ((JSONArray) v).optJSONArray(1);
+                if (arr != null) for (int i = 0; i < arr.length(); i++) {
+                    Object item = arr.opt(i);
+                    if (item instanceof String) out.add((String) item);
+                    else if (item instanceof JSONObject) out.add(((JSONObject) item).optString("phrase", ""));
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (c != null) c.disconnect();
+        }
+        return out;
+    }
+
+    private void addSuggestion(String icon, String title, String subtitle, final Runnable action) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(10), dp(9), dp(10), dp(9));
+        row.setBackground(pressable(Color.TRANSPARENT, 12, 0));
+        TextView i = text(icon, 15, theme.accent);
+        i.setGravity(Gravity.CENTER);
+        row.addView(i, new LinearLayout.LayoutParams(dp(34), -2));
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        TextView t = text(title, 15, theme.text);
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        texts.addView(t);
+        if (subtitle != null) {
+            TextView s = text(subtitle, 11, theme.muted);
+            s.setSingleLine(true);
+            texts.addView(s);
+        }
+        row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
+        onTap(row, action);
+        suggestBox.addView(row, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    // ================================================================== long-press menu
+
+    private boolean onWebLongPress(final Tab t) {
+        if (t.web == null) return false;
+        WebView.HitTestResult r = t.web.getHitTestResult();
+        if (r == null) return false;
+        int type = r.getType();
+        final String extra = r.getExtra();
+        if (extra == null) return false;
+        if (type == WebView.HitTestResult.SRC_ANCHOR_TYPE) {
+            if (t.start) {
+                int i = Store.indexOf(store.speedDial, extra);
+                if (i >= 0) { editDial(i); return true; }
+            }
+            linkMenu(extra, null);
+            return true;
+        }
+        if (type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) {
+            Handler h = new Handler(Looper.getMainLooper(), msg -> {
+                String href = msg.getData() == null ? null : msg.getData().getString("url");
+                if (t.start && href != null) {
+                    int i = Store.indexOf(store.speedDial, href);
+                    if (i >= 0) { editDial(i); return true; }
+                }
+                linkMenu(href != null ? href : extra, extra);
+                return true;
+            });
+            t.web.requestFocusNodeHref(h.obtainMessage());
+            return true;
+        }
+        if (type == WebView.HitTestResult.IMAGE_TYPE) {
+            linkMenu(null, extra);
+            return true;
+        }
+        return false;
+    }
+
+    private void linkMenu(final String link, final String image) {
+        List<String> labels = new ArrayList<>();
+        final List<Runnable> actions = new ArrayList<>();
+        if (Store.isWeb(link)) {
+            labels.add("Open in new tab"); actions.add(() -> openInNewTab(link, false));
+            labels.add("Open in background tab"); actions.add(() -> openInNewTab(link, true));
+            labels.add("Open in private tab"); actions.add(() -> openPrivate(link));
+            labels.add("Copy link"); actions.add(() -> copy(link));
+            labels.add("Share link"); actions.add(() -> share(link));
+        }
+        if (Store.isWeb(image)) {
+            labels.add("Open image in new tab"); actions.add(() -> openInNewTab(image, false));
+            labels.add("Download image"); actions.add(() -> confirmDownload(image, null, null, null));
+            labels.add("Copy image link"); actions.add(() -> copy(image));
+        }
+        if (labels.isEmpty()) return;
+        String title = Store.isWeb(link) ? link : image;
+        new AlertDialog.Builder(this).setTitle(title.length() > 80 ? title.substring(0, 80) + "…" : title)
+            .setItems(labels.toArray(new String[0]), (d, w) -> actions.get(w).run()).show();
+    }
+
+    private void copy(String s) {
+        ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("ASTER", s));
+        toast("Copied");
+    }
+
+    private void share(String s) {
+        Intent i = new Intent(Intent.ACTION_SEND);
+        i.setType("text/plain");
+        i.putExtra(Intent.EXTRA_TEXT, s);
+        startActivity(Intent.createChooser(i, "Share"));
+    }
+
+    // ================================================================== fullscreen video
+
+    private void enterFullscreen(View view, WebChromeClient.CustomViewCallback callback) {
+        if (customView != null) { callback.onCustomViewHidden(); return; }
+        customView = view;
+        customCallback = callback;
+        FrameLayout decor = (FrameLayout) getWindow().getDecorView();
+        view.setBackgroundColor(Color.BLACK);
+        decor.addView(view, new FrameLayout.LayoutParams(-1, -1));
+        orientationBeforeFullscreen = getRequestedOrientation();
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+        setSystemBarsHidden(true);
+    }
+
+    private void exitFullscreen() {
+        if (customView == null) return;
+        FrameLayout decor = (FrameLayout) getWindow().getDecorView();
+        decor.removeView(customView);
+        customView = null;
+        setSystemBarsHidden(false);
+        setRequestedOrientation(orientationBeforeFullscreen);
+        if (customCallback != null) customCallback.onCustomViewHidden();
+        customCallback = null;
+    }
+
+    @SuppressWarnings("deprecation")
+    private void setSystemBarsHidden(boolean on) {
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController c = getWindow().getInsetsController();
+            if (c == null) return;
+            if (on) {
+                c.hide(WindowInsets.Type.systemBars());
+                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            } else {
+                c.show(WindowInsets.Type.systemBars());
+            }
+        } else {
+            View decor = getWindow().getDecorView();
+            decor.setSystemUiVisibility(on
+                ? View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                  | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                : 0);
+        }
+    }
+
+    // ================================================================== find in page
+
+    void openFind() {
+        Tab t = current();
+        if (t == null || t.start) { toast("Open a web page first"); return; }
+        findBar.setVisibility(View.VISIBLE);
+        findInput.setText("");
+        findInput.requestFocus();
+        showKeyboard(findInput);
+    }
+
+    private void closeFind() {
+        findBar.setVisibility(View.GONE);
+        Tab t = current();
+        if (t != null && t.web != null) t.web.clearMatches();
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(findInput.getWindowToken(), 0);
+    }
+
+    // ================================================================== menu
+
+    private void showMenu() {
+        final Tab t = current();
+        final boolean web = t != null && !t.start && Store.isWeb(t.url);
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(14), dp(8), dp(14), dp(16));
+        final Dialog[] holder = new Dialog[1];
+
+        if (web) {
+            LinearLayout head = new LinearLayout(this);
+            head.setOrientation(LinearLayout.VERTICAL);
+            head.setPadding(dp(6), dp(4), dp(6), dp(10));
+            TextView title = bold(t.displayTitle(), 15, theme.text);
+            title.setSingleLine(true);
+            title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            head.addView(title);
+            TextView url = text(Store.hostOf(t.url), 12, theme.muted);
+            head.addView(url);
+            body.addView(head);
+        }
+
+        List<Object[]> tiles = new ArrayList<>();
+        tiles.add(new Object[]{"+", "New tab", (Runnable) () -> openInNewTab(null, false), false});
+        tiles.add(new Object[]{"👁", incognito ? "New private tab" : "Private window", (Runnable) () -> openPrivate(null), false});
+        tiles.add(new Object[]{"★", "Bookmarks", (Runnable) this::showBookmarks, false});
+        tiles.add(new Object[]{"🕘", "History", (Runnable) this::showHistory, false});
+        tiles.add(new Object[]{"⬇", "Downloads", (Runnable) this::showDownloads, false});
+        tiles.add(new Object[]{web && store.isBookmarked(t.url) ? "★" : "☆", web && store.isBookmarked(t.url) ? "Bookmarked" : "Bookmark", (Runnable) this::toggleBookmark, web && store.isBookmarked(t.url)});
+        tiles.add(new Object[]{"🔎", "Find in page", (Runnable) this::openFind, false});
+        tiles.add(new Object[]{"↗", "Share", (Runnable) () -> { if (web) share(t.url); }, false});
+        tiles.add(new Object[]{"🖥", "Desktop site", (Runnable) this::toggleDesktop, t != null && t.desktop});
+        tiles.add(new Object[]{"📖", "Reader", (Runnable) this::toggleReader, t != null && t.reader});
+        tiles.add(new Object[]{"文", "Translate", (Runnable) this::translate, false});
+        tiles.add(new Object[]{"🌙", "Night mode", (Runnable) this::toggleNight, prefs.getBoolean("night_mode", false)});
+        tiles.add(new Object[]{"⊕", "Add to Home", (Runnable) this::addToHome, false});
+        tiles.add(new Object[]{"⚡", "GX Control", (Runnable) this::showGxControl, false});
+        tiles.add(new Object[]{"🎨", "Themes", (Runnable) this::showThemes, false});
+        tiles.add(new Object[]{"⛨", "Shields", (Runnable) this::showShields, false});
+        tiles.add(new Object[]{"⚙", "Settings", (Runnable) this::showSettings, false});
+        tiles.add(new Object[]{"⏻", incognito ? "Close private" : "Exit", (Runnable) this::exitBrowser, false});
+
+        int cols = getResources().getConfiguration().screenWidthDp >= 480 ? 6 : 4;
+        LinearLayout row = null;
+        for (int i = 0; i < tiles.size(); i++) {
+            if (i % cols == 0) {
+                row = new LinearLayout(this);
+                body.addView(row, new LinearLayout.LayoutParams(-1, -2));
+            }
+            final Object[] tile = tiles.get(i);
+            LinearLayout cell = new LinearLayout(this);
+            cell.setOrientation(LinearLayout.VERTICAL);
+            cell.setGravity(Gravity.CENTER);
+            cell.setPadding(dp(2), dp(10), dp(2), dp(10));
+            boolean on = (Boolean) tile[3];
+            cell.setBackground(pressable(on ? Theme.withAlpha(theme.accent, 55) : Color.TRANSPARENT, 16, 0));
+            TextView ic = text((String) tile[0], 21, on ? theme.accent : theme.text);
+            ic.setGravity(Gravity.CENTER);
+            cell.addView(ic, new LinearLayout.LayoutParams(dp(46), dp(40)));
+            TextView lb = text((String) tile[1], 11, theme.muted);
+            lb.setGravity(Gravity.CENTER);
+            lb.setMaxLines(2);
+            cell.addView(lb, new LinearLayout.LayoutParams(-1, -2));
+            onTap(cell, () -> {
+                if (holder[0] != null) holder[0].dismiss();
+                ((Runnable) tile[2]).run();
+            });
+            row.addView(cell, new LinearLayout.LayoutParams(0, -2, 1));
+        }
+        if (row != null) {
+            int rem = tiles.size() % cols;
+            if (rem != 0) for (int i = rem; i < cols; i++) row.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+        }
+        holder[0] = sheet(body);
+        holder[0].show();
+    }
+
+    private void exitBrowser() {
+        saveSession();
+        finishAndRemoveTask();
+    }
+
+    void toggleBookmark() {
+        Tab t = current();
+        if (t == null || t.start || !Store.isWeb(t.url)) { toast("Open a web page first"); return; }
+        if (incognito) { toast("Bookmarks can't be changed from a private window"); return; }
+        boolean added = store.toggleBookmark(t.displayTitle(), t.web != null && t.web.getUrl() != null ? t.web.getUrl() : t.url);
+        toast(added ? "Bookmarked" : "Bookmark removed");
+    }
+
+    private void toggleDesktop() {
+        Tab t = current();
+        if (t == null) return;
+        t.desktop = !t.desktop;
+        applySettings(t);
+        if (!t.start && t.web != null) t.web.reload();
+        toast(t.desktop ? "Desktop site on" : "Desktop site off");
+    }
+
+    private void toggleNight() {
+        boolean on = !prefs.getBoolean("night_mode", false);
+        prefs.edit().putBoolean("night_mode", on).apply();
+        applyAllSettings();
+        Tab t = current();
+        if (t != null && t.web != null && !t.start) {
+            if (Build.VERSION.SDK_INT < 29) {
+                t.web.evaluateJavascript(on ? Scripts.style("__aster_night", Scripts.nightCss()) : Scripts.removeStyle("__aster_night"), null);
+            } else t.web.reload();
+        }
+        toast(on ? "Night mode on for websites" : "Night mode off");
+    }
+
+    private void translate() {
+        Tab t = current();
+        if (t == null || t.start || !Store.isWeb(t.url)) { toast("Open a web page first"); return; }
+        String lang = prefs.getString("translate_language", "es");
+        openInNewTab("https://translate.google.com/translate?sl=auto&tl=" + lang + "&u=" + StartPage.enc(t.url), false);
+    }
+
+    private void toggleReader() {
+        final Tab t = current();
+        if (t == null || t.web == null || t.start) { toast("Open an article first"); return; }
+        if (t.reader) { t.web.goBack(); return; }
+        t.web.evaluateJavascript(Scripts.readerExtract(), result -> {
+            try {
+                Object decoded = new JSONTokener(result).nextValue();
+                JSONObject o = new JSONObject(String.valueOf(decoded));
+                if (o.optInt("chars", 0) < 350) { toast("No readable article found on this page"); return; }
+                String html = readerHtml(o);
+                t.readerPending = true;
+                String base = o.optString("url", t.url);
+                t.web.loadDataWithBaseURL(base, html, "text/html", "UTF-8", base);
+            } catch (Exception e) {
+                toast("Reader mode could not parse this page");
+            }
+        });
+    }
+
+    private String readerHtml(JSONObject o) {
+        boolean dark = !"light".equals(prefs.getString("reader_theme", "dark"));
+        String bg = dark ? "#16141c" : "#f6f1e7";
+        String fg = dark ? "#e9e6ef" : "#2a2520";
+        StringBuilder h = new StringBuilder();
+        h.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>")
+            .append(StartPage.esc(o.optString("title"))).append("</title><style>")
+            .append("body{margin:0;background:").append(bg).append(";color:").append(fg).append(";font:19px/1.75 Georgia,'Noto Serif',serif}")
+            .append("main{max-width:700px;margin:0 auto;padding:28px 22px 80px}h1{font:800 30px/1.25 system-ui,sans-serif;margin:8px 0 6px}")
+            .append(".site{font:12px system-ui,sans-serif;letter-spacing:2px;text-transform:uppercase;color:").append(Theme.css(theme.accent)).append("}")
+            .append("h2{font:700 22px/1.3 system-ui,sans-serif;margin:30px 0 8px}img{max-width:100%;height:auto;border-radius:12px;margin:12px 0}")
+            .append("blockquote{border-left:4px solid ").append(Theme.css(theme.accent)).append(";margin:18px 0;padding:2px 16px;opacity:.9}")
+            .append("pre{white-space:pre-wrap;font:14px monospace;background:#0003;padding:12px;border-radius:10px}li{margin:6px 0}")
+            .append(".bar{position:fixed;right:14px;bottom:14px;display:flex;gap:8px}.bar button{width:46px;height:46px;border-radius:50%;border:0;font:700 16px system-ui;color:#fff;background:")
+            .append(Theme.css(theme.accent)).append("}</style></head><body><main><div class='site'>")
+            .append(StartPage.esc(o.optString("site"))).append(" · ASTER READER</div><h1>").append(StartPage.esc(o.optString("title"))).append("</h1>");
+        JSONArray blocks = o.optJSONArray("blocks");
+        boolean inList = false;
+        if (blocks != null) for (int i = 0; i < blocks.length(); i++) {
+            JSONObject b = blocks.optJSONObject(i);
+            if (b == null) continue;
+            String type = b.optString("t");
+            String v = StartPage.esc(b.optString("v"));
+            if ("li".equals(type) && !inList) { h.append("<ul>"); inList = true; }
+            if (!"li".equals(type) && inList) { h.append("</ul>"); inList = false; }
+            switch (type) {
+                case "h": h.append("<h2>").append(v).append("</h2>"); break;
+                case "img": if (v.startsWith("https://")) h.append("<img loading='lazy' src='").append(v).append("'>"); break;
+                case "li": h.append("<li>").append(v).append("</li>"); break;
+                case "q": h.append("<blockquote>").append(v).append("</blockquote>"); break;
+                case "pre": h.append("<pre>").append(v).append("</pre>"); break;
+                default: h.append("<p>").append(v).append("</p>"); break;
+            }
+        }
+        if (inList) h.append("</ul>");
+        h.append("</main><div class='bar'><button onclick=\"z(-1)\">A-</button><button onclick=\"z(1)\">A+</button></div>")
+            .append("<script>var s=19;function z(d){s=Math.max(14,Math.min(30,s+d*2));document.body.style.fontSize=s+'px';}</script></body></html>");
+        return h.toString();
+    }
+
+    private void addToHome() {
+        Tab t = current();
+        if (t == null || t.start || !Store.isWeb(t.url)) { toast("Open a web page first"); return; }
+        if (Build.VERSION.SDK_INT < 26) { toast("Requires Android 8 or newer"); return; }
+        ShortcutManager sm = getSystemService(ShortcutManager.class);
+        if (sm == null || !sm.isRequestPinShortcutSupported()) { toast("Your launcher doesn't support shortcuts"); return; }
+        String url = t.web != null && t.web.getUrl() != null ? t.web.getUrl() : t.url;
+        Intent open = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        open.setClass(this, MainActivity.class);
+        Bitmap icon = shortcutIcon(t);
+        ShortcutInfo info = new ShortcutInfo.Builder(this, "aster-" + Math.abs(url.hashCode()))
+            .setShortLabel(t.displayTitle().length() > 24 ? t.displayTitle().substring(0, 24) : t.displayTitle())
+            .setIcon(Icon.createWithBitmap(icon))
+            .setIntent(open)
+            .build();
+        sm.requestPinShortcut(info, null);
+    }
+
+    private Bitmap shortcutIcon(Tab t) {
+        int size = dp(96);
+        Bitmap b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(b);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setColor(theme.surface2);
+        c.drawCircle(size / 2f, size / 2f, size / 2f, p);
+        if (t.favicon != null) {
+            int inner = (int) (size * 0.56f);
+            Bitmap scaled = Bitmap.createScaledBitmap(t.favicon, inner, inner, true);
+            c.drawBitmap(scaled, (size - inner) / 2f, (size - inner) / 2f, null);
+        } else {
+            p.setColor(theme.accent);
+            p.setTextSize(size * 0.48f);
+            p.setTypeface(Typeface.DEFAULT_BOLD);
+            p.setTextAlign(Paint.Align.CENTER);
+            String letter = Store.hostOf(t.url).isEmpty() ? "A" : Store.hostOf(t.url).substring(0, 1).toUpperCase(Locale.ROOT);
+            c.drawText(letter, size / 2f, size / 2f - (p.descent() + p.ascent()) / 2f, p);
+        }
+        return b;
+    }
+
+    // ================================================================== tab switcher
+
+    void showTabs() {
+        final Page page = new Page((incognito ? "Private tabs" : "Tabs") + " · " + tabs.size());
+        page.action("Close all", () -> new AlertDialog.Builder(this).setTitle("Close all tabs?")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Close all", (d, w) -> { page.dismiss(); closeAllTabs(); }).show());
+        captureThumb(current());
+        buildTabGrid(page);
+        page.bottom.setVisibility(View.VISIBLE);
+        TextView add = bold("+  New tab", 15, Color.WHITE);
+        add.setGravity(Gravity.CENTER);
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{theme.accent, theme.accent2});
+        g.setCornerRadius(dp(22));
+        add.setBackground(g);
+        onTap(add, () -> { page.dismiss(); openInNewTab(null, false); });
+        page.bottom.addView(add, new LinearLayout.LayoutParams(0, dp(48), 1));
+        TextView priv = bold(incognito ? "Private ✓" : "👁  Private", 14, theme.text);
+        priv.setGravity(Gravity.CENTER);
+        priv.setBackground(pressable(theme.surface, 22, 0));
+        onTap(priv, () -> { page.dismiss(); openPrivate(null); });
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(dp(130), dp(48));
+        pl.leftMargin = dp(10);
+        page.bottom.addView(priv, pl);
+        page.show();
+    }
+
+    private void buildTabGrid(final Page page) {
+        page.body.removeAllViews();
+        int cols = getResources().getConfiguration().screenWidthDp >= 600 ? 3 : 2;
+        int screen = getResources().getDisplayMetrics().widthPixels - dp(28);
+        int cardW = (screen - dp(10) * (cols - 1)) / cols;
+        int cardH = (int) (cardW * 1.32f);
+        LinearLayout row = null;
+        for (int i = 0; i < tabs.size(); i++) {
+            if (i % cols == 0) {
+                row = new LinearLayout(this);
+                LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
+                rl.bottomMargin = dp(10);
+                page.body.addView(row, rl);
+            }
+            final Tab t = tabs.get(i);
+            final int index = i;
+            FrameLayout card = new FrameLayout(this);
+            card.setClipToOutline(true);
+            boolean isActive = i == active;
+            card.setBackground(shape(theme.surface, 18, isActive ? theme.accent : Theme.withAlpha(theme.muted, 50)));
+            if (isActive) ((GradientDrawable) card.getBackground()).setStroke(dp(2), theme.accent);
+            ImageView img = new ImageView(this);
+            img.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            if (t.thumbnail != null && !t.start) img.setImageBitmap(t.thumbnail);
+            else {
+                GradientDrawable ph = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    new int[]{Theme.withAlpha(theme.accent, 90), theme.surface2});
+                img.setImageDrawable(ph);
+            }
+            FrameLayout.LayoutParams il = new FrameLayout.LayoutParams(-1, -1);
+            il.topMargin = dp(38);
+            card.addView(img, il);
+            LinearLayout top = new LinearLayout(this);
+            top.setGravity(Gravity.CENTER_VERTICAL);
+            top.setPadding(dp(10), 0, dp(2), 0);
+            top.setBackgroundColor(isActive ? Theme.withAlpha(theme.accent, 60) : theme.surface2);
+            TextView title = text((t.sleeping() && !t.start ? "💤 " : "") + t.displayTitle(), 12, theme.text);
+            title.setSingleLine(true);
+            title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            top.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+            TextView x = chromeButton("✕", 14, "Close tab");
+            x.setTextColor(theme.muted);
+            top.addView(x, new LinearLayout.LayoutParams(dp(36), dp(36)));
+            card.addView(top, new FrameLayout.LayoutParams(-1, dp(38), Gravity.TOP));
+            if (t.start) {
+                TextView star = bold("✦", 34, theme.accent);
+                star.setGravity(Gravity.CENTER);
+                FrameLayout.LayoutParams sl = new FrameLayout.LayoutParams(-1, -1);
+                sl.topMargin = dp(38);
+                card.addView(star, sl);
+            }
+            x.setOnClickListener(v -> {
+                feedback(v);
+                closeTab(index);
+                buildTabGrid(page);
+            });
+            card.setOnTouchListener(new SwipeToClose(card, () -> {
+                closeTab(index);
+                buildTabGrid(page);
+            }, () -> {
+                page.dismiss();
+                select(index);
+            }));
+            LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(cardW, cardH);
+            if (i % cols != 0) cl.leftMargin = dp(10);
+            row.addView(card, cl);
+        }
+    }
+
+    /** Horizontal swipe on a tab card closes it, a tap selects it. */
+    private final class SwipeToClose implements View.OnTouchListener {
+        private final View card;
+        private final Runnable onClose;
+        private final Runnable onTapAction;
+        private float sx;
+        private float sy;
+        private boolean dragging;
+
+        SwipeToClose(View card, Runnable onClose, Runnable onTap) {
+            this.card = card;
+            this.onClose = onClose;
+            this.onTapAction = onTap;
+        }
+
+        @Override public boolean onTouch(View v, MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    sx = e.getRawX();
+                    sy = e.getRawY();
+                    dragging = false;
+                    card.animate().scaleX(0.97f).scaleY(0.97f).setDuration(80).start();
+                    return true;
+                case MotionEvent.ACTION_MOVE: {
+                    float dx = e.getRawX() - sx;
+                    float dy = e.getRawY() - sy;
+                    if (!dragging && Math.abs(dx) > dp(14) && Math.abs(dx) > Math.abs(dy)) {
+                        dragging = true;
+                        v.getParent().requestDisallowInterceptTouchEvent(true);
+                    }
+                    if (dragging) {
+                        card.setTranslationX(dx);
+                        card.setAlpha(Math.max(0.2f, 1f - Math.abs(dx) / card.getWidth()));
+                    }
+                    return true;
+                }
+                case MotionEvent.ACTION_UP: {
+                    float dx = e.getRawX() - sx;
+                    float dy = e.getRawY() - sy;
+                    card.animate().scaleX(1f).scaleY(1f).setDuration(80).start();
+                    if (dragging && Math.abs(dx) > card.getWidth() * 0.38f) {
+                        feedback(card);
+                        card.animate().translationX(dx > 0 ? card.getWidth() * 1.5f : -card.getWidth() * 1.5f).alpha(0f)
+                            .setDuration(160).withEndAction(onClose).start();
+                    } else if (dragging) {
+                        card.animate().translationX(0).alpha(1f).setDuration(160).start();
+                    } else if (Math.abs(dx) < dp(10) && Math.abs(dy) < dp(10)) {
+                        feedback(card);
+                        onTapAction.run();
+                    }
+                    return true;
+                }
+                case MotionEvent.ACTION_CANCEL:
+                    card.animate().translationX(0).alpha(1f).scaleX(1f).scaleY(1f).setDuration(160).start();
+                    return true;
+                default:
+                    return false;
+            }
+        }
+    }
+
+    // ================================================================== shields panel
+
+    void showShields() {
+        final Tab t = current();
+        final String host = t == null || t.start ? null : t.topHost;
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(18), dp(8), dp(18), dp(18));
+        final Dialog[] d = new Dialog[1];
+
+        TextView brand = bold("⛨  ASTER SHIELDS", 12, theme.accent);
+        brand.setLetterSpacing(0.15f);
+        body.addView(brand);
+        TextView site = bold(host == null ? "New tab" : host, 21, theme.text);
+        site.setPadding(0, dp(6), 0, 0);
+        body.addView(site);
+
+        final boolean up = shields.shieldsUp(host);
+        LinearLayout statusRow = new LinearLayout(this);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        statusRow.setPadding(dp(16), dp(14), dp(12), dp(14));
+        statusRow.setBackground(shape(up ? Theme.withAlpha(theme.accent, 40) : theme.surface, 18, up ? Theme.withAlpha(theme.accent, 120) : 0));
+        LinearLayout.LayoutParams srl = new LinearLayout.LayoutParams(-1, -2);
+        srl.topMargin = dp(14);
+        body.addView(statusRow, srl);
+        TextView status = bold(!shields.enabledGlobally() ? "Shields are off everywhere" : (up ? "Shields are UP for this site" : "Shields are DOWN for this site"), 15, up ? theme.accent : theme.muted);
+        statusRow.addView(status, new LinearLayout.LayoutParams(0, -2, 1));
+        Switch sw = new Switch(this);
+        sw.setChecked(up);
+        sw.setEnabled(host != null && shields.enabledGlobally());
+        sw.setThumbTintList(ColorStateList.valueOf(theme.accent));
+        statusRow.addView(sw);
+        sw.setOnCheckedChangeListener((b, checked) -> {
+            feedback(b);
+            shields.setSite(host, "up", checked);
+            d[0].dismiss();
+            reload();
+            ui.postDelayed(this::showShields, 350);
+        });
+
+        int ads = t == null ? 0 : t.blockedAds.get();
+        int trk = t == null ? 0 : t.blockedTrackers.get();
+        LinearLayout stats = new LinearLayout(this);
+        LinearLayout.LayoutParams stl = new LinearLayout.LayoutParams(-1, -2);
+        stl.topMargin = dp(12);
+        body.addView(stats, stl);
+        statTile(stats, String.valueOf(ads + trk), "Blocked on this page");
+        statTile(stats, StartPage.formatCount(shields.totalBlocked()), "Blocked all time");
+        statTile(stats, StartPage.formatBytes(shields.totalBlocked() * ShieldEngine.BYTES_PER_BLOCK), "Data saved");
+        TextView detail = text(ads + " ads · " + trk + " trackers on this page", 12, theme.muted);
+        detail.setPadding(dp(4), dp(8), 0, 0);
+        body.addView(detail);
+
+        if (host != null && up) {
+            sectionTitle(body, "Advanced controls for " + host);
+            shieldToggle(body, "Block fingerprinting", "Adds noise to canvas, audio and hardware details", host, "fp", shields.fingerprintDefault(), d);
+            shieldToggle(body, "Hide ad elements", "Cosmetic filtering of ad slots and banners", host, "cosmetic", shields.cosmeticEnabled(), d);
+            shieldToggle(body, "Block scripts", "Disables JavaScript on this site (may break pages)", host, "scripts", false, d);
+        }
+        sectionTitle(body, "Global");
+        rowCard(body, "Ads & trackers blocking", shields.aggressive() ? "Aggressive — also blocks first-party ads" : "Standard — blocks third-party ads & trackers", () -> {
+            d[0].dismiss();
+            choose("Blocking mode", new String[]{"Standard", "Aggressive"}, shields.aggressive() ? 1 : 0, w -> {
+                prefs.edit().putString("shield_mode", w == 1 ? "aggressive" : "standard").apply();
+                reload();
+            });
+        });
+        rowCard(body, "Blocked requests on this page", "See which domains were stopped", () -> { d[0].dismiss(); showBlockedList(t); });
+        String updated = shields.lastUpdate() == 0 ? "never" : android.text.format.DateUtils.getRelativeTimeSpanString(shields.lastUpdate()).toString();
+        rowCard(body, shields.isUpdating() ? "Updating filter lists…" : "Update filter lists",
+            StartPage.formatCount(shields.ruleCount()) + " network rules · " + StartPage.formatCount(shields.cosmeticCount()) + " cosmetic · updated " + updated, () -> {
+                d[0].dismiss();
+                updateFilters();
+            });
+        rowCard(body, shields.enabledGlobally() ? "Turn Shields off everywhere" : "Turn Shields on everywhere", null, () -> {
+            prefs.edit().putBoolean("shield_enabled", !shields.enabledGlobally()).apply();
+            d[0].dismiss();
+            reload();
+        });
+        TextView note = text("ASTER runs on Android System WebView. Network and cosmetic rules block most ads and trackers, but video ads served from the same servers as the video (e.g. some YouTube ads) can't always be removed.", 11, theme.muted);
+        note.setPadding(dp(4), dp(12), dp(4), 0);
+        body.addView(note);
+        d[0] = sheet(body);
+        d[0].show();
+    }
+
+    private void updateFilters() {
+        if (incognito) { toast("Update filters from a normal window"); return; }
+        toast("Updating EasyList, EasyPrivacy & AdGuard filters…");
+        shields.updateAsync((ok, rules) -> ui.post(() -> {
+            toast(ok ? "Filters updated: " + StartPage.formatCount(rules) + " rules" : "Couldn't update filters — keeping existing rules");
+            refreshShieldChrome();
+        }));
+    }
+
+    private void shieldToggle(LinearLayout body, String title, String subtitle, final String host, final String key, boolean def, final Dialog[] d) {
+        LinearLayout row = rowCard(body, title, subtitle, null);
+        Switch sw = new Switch(this);
+        sw.setChecked(shields.siteFlag(host, key, def));
+        sw.setThumbTintList(ColorStateList.valueOf(theme.accent));
+        row.addView(sw);
+        row.setOnClickListener(v -> sw.toggle());
+        sw.setOnCheckedChangeListener((b, checked) -> {
+            feedback(b);
+            shields.setSite(host, key, checked);
+            reload();
+        });
+    }
+
+    private void statTile(LinearLayout parent, String value, String label) {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setGravity(Gravity.CENTER);
+        c.setPadding(dp(6), dp(12), dp(6), dp(12));
+        c.setBackground(shape(theme.surface, 16, 0));
+        TextView v = bold(value, 20, theme.accent);
+        v.setGravity(Gravity.CENTER);
+        c.addView(v);
+        TextView l = text(label, 10, theme.muted);
+        l.setGravity(Gravity.CENTER);
+        c.addView(l);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
+        lp.setMargins(dp(3), 0, dp(3), 0);
+        parent.addView(c, lp);
+    }
+
+    private void showBlockedList(Tab t) {
+        StringBuilder sb = new StringBuilder();
+        if (t != null) {
+            synchronized (t.blockedHosts) {
+                for (Map.Entry<String, Integer> e : t.blockedHosts.entrySet()) sb.append(e.getKey()).append("  ·  ").append(e.getValue()).append('\n');
+            }
+        }
+        new AlertDialog.Builder(this).setTitle("Blocked on this page")
+            .setMessage(sb.length() == 0 ? "Nothing blocked on this page yet." : sb.toString())
+            .setPositiveButton("OK", null).show();
+    }
+
+    // ================================================================== GX control
+
+    void showGxControl() {
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(18), dp(8), dp(18), dp(18));
+        final Dialog[] d = new Dialog[1];
+        TextView title = bold("⚡  GX CONTROL", 13, theme.accent);
+        title.setLetterSpacing(0.15f);
+        body.addView(title);
+
+        ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        long appMb = 0;
+        long availMb = 0;
+        long totalMb = 0;
+        if (am != null) {
+            try {
+                Debug.MemoryInfo[] mi = am.getProcessMemoryInfo(new int[]{android.os.Process.myPid()});
+                if (mi != null && mi.length > 0) appMb = mi[0].getTotalPss() / 1024L;
+            } catch (Exception ignored) { }
+            ActivityManager.MemoryInfo info = new ActivityManager.MemoryInfo();
+            am.getMemoryInfo(info);
+            availMb = info.availMem / (1024L * 1024L);
+            totalMb = info.totalMem / (1024L * 1024L);
+        }
+        sectionTitle(body, "RAM");
+        LinearLayout ram = new LinearLayout(this);
+        ram.setOrientation(LinearLayout.VERTICAL);
+        ram.setPadding(dp(16), dp(14), dp(16), dp(14));
+        ram.setBackground(shape(theme.surface, 18, 0));
+        body.addView(ram);
+        ram.addView(bold("ASTER: " + appMb + " MB", 22, theme.text));
+        ram.addView(text("Device: " + (totalMb - availMb) + " MB used of " + totalMb + " MB · " + liveTabs() + " of " + tabs.size() + " tabs active", 12, theme.muted));
+        ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        bar.setMax(100);
+        bar.setProgress(totalMb == 0 ? 0 : (int) ((totalMb - availMb) * 100 / totalMb));
+        bar.setProgressTintList(ColorStateList.valueOf(theme.accent));
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, dp(8));
+        bl.topMargin = dp(10);
+        ram.addView(bar, bl);
+
+        switchRow(body, "RAM limiter", "Puts the least-used tabs to sleep to free memory", "gx_ram_limiter", true, this::enforceLimit);
+        final TextView limitLabel = text("Max active tabs: " + prefs.getInt("gx_max_live", 5), 13, theme.text);
+        limitLabel.setPadding(dp(6), dp(6), 0, 0);
+        body.addView(limitLabel);
+        SeekBar seek = new SeekBar(this);
+        seek.setMax(9);
+        seek.setProgress(prefs.getInt("gx_max_live", 5) - 1);
+        seek.setProgressTintList(ColorStateList.valueOf(theme.accent));
+        seek.setThumbTintList(ColorStateList.valueOf(theme.accent));
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int p, boolean user) {
+                limitLabel.setText("Max active tabs: " + (p + 1));
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) { }
+            @Override public void onStopTrackingTouch(SeekBar s) {
+                prefs.edit().putInt("gx_max_live", s.getProgress() + 1).apply();
+                enforceLimit();
+            }
+        });
+        body.addView(seek, new LinearLayout.LayoutParams(-1, dp(40)));
+
+        sectionTitle(body, "Hot tabs killer");
+        List<Tab> sorted = new ArrayList<>(tabs);
+        Collections.sort(sorted, new Comparator<Tab>() {
+            @Override public int compare(Tab a, Tab b) {
+                if (a.sleeping() != b.sleeping()) return a.sleeping() ? 1 : -1;
+                return Long.compare(b.lastUsed, a.lastUsed);
+            }
+        });
+        int shown = 0;
+        for (final Tab t : sorted) {
+            if (shown++ >= 12) break;
+            String state = t == current() ? "Active" : (t.sleeping() ? "Sleeping 💤" : "Running in background");
+            LinearLayout row = rowCard(body, t.displayTitle(), state, null);
+            if (t != current() && !t.sleeping()) {
+                TextView sleep = bold("Sleep", 12, theme.accent);
+                sleep.setPadding(dp(10), dp(8), dp(10), dp(8));
+                onTap(sleep, () -> { sleepTab(t); d[0].dismiss(); showGxControl(); });
+                row.addView(sleep);
+            }
+            TextView kill = bold("✕", 15, theme.muted);
+            kill.setPadding(dp(10), dp(8), dp(6), dp(8));
+            onTap(kill, () -> { int i = tabs.indexOf(t); if (i >= 0) closeTab(i); d[0].dismiss(); showGxControl(); });
+            row.addView(kill);
+        }
+        rowCard(body, "Sleep all background tabs", null, () -> {
+            for (Tab t : new ArrayList<>(tabs)) sleepTab(t);
+            d[0].dismiss();
+            toast("Background tabs are sleeping");
+        });
+
+        sectionTitle(body, "Network");
+        switchRow(body, "Data saver", "Don't load images — faster pages on slow or metered networks", "data_saver", false, () -> {
+            applyAllSettings();
+            reload();
+        });
+        rowCard(body, "Clear web cache", "Free storage used by cached pages", () -> {
+            Tab t = current();
+            if (t != null && t.web != null) t.web.clearCache(true);
+            toast("Cache cleared");
+        });
+        TextView note = text("Android doesn't let apps cap CPU or bandwidth, so GX Control manages memory by sleeping tabs and saves data by skipping images. WebView renderer memory is reported separately by Android.", 11, theme.muted);
+        note.setPadding(dp(4), dp(12), dp(4), 0);
+        body.addView(note);
+        d[0] = sheet(body);
+        d[0].show();
+    }
+
+    // ================================================================== themes
+
+    void showThemes() {
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(16), dp(8), dp(16), dp(18));
+        final Dialog[] d = new Dialog[1];
+        TextView title = bold("🎨  THEMES", 13, theme.accent);
+        title.setLetterSpacing(0.15f);
+        body.addView(title);
+        for (final Theme t : Theme.ALL) {
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(12), dp(10), dp(12), dp(10));
+            row.setBackground(pressable(t.id.equals(theme.id) ? Theme.withAlpha(t.accent, 50) : theme.surface, 16, t.id.equals(theme.id) ? t.accent : 0));
+            View swatch = new View(this);
+            GradientDrawable sw = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{t.accent, t.accent2});
+            sw.setShape(GradientDrawable.OVAL);
+            sw.setStroke(dp(3), t.bg);
+            swatch.setBackground(sw);
+            row.addView(swatch, new LinearLayout.LayoutParams(dp(34), dp(34)));
+            LinearLayout texts = new LinearLayout(this);
+            texts.setOrientation(LinearLayout.VERTICAL);
+            texts.setPadding(dp(12), 0, 0, 0);
+            texts.addView(bold(t.name, 15, theme.text));
+            texts.addView(text(t.family + (t.glass ? " · translucent" : ""), 11, theme.muted));
+            row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
+            if (t.id.equals(theme.id)) row.addView(bold("✓", 18, t.accent));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.topMargin = dp(8);
+            body.addView(row, lp);
+            onTap(row, () -> { d[0].dismiss(); setTheme(t); });
+        }
+        sectionTitle(body, "Start page");
+        rowCard(body, "Wallpaper", wallpaperName(), () -> { d[0].dismiss(); chooseWallpaper(); });
+        rowCard(body, "Navigation style", fabMode() ? "Fast Action Button (GX)" : "Bottom toolbar", () -> { d[0].dismiss(); chooseNavStyle(); });
+        d[0] = sheet(body);
+        d[0].show();
+    }
+
+    private String wallpaperName() {
+        String id = prefs.getString("home_wallpaper", theme.isGx() ? "synthwave" : "nebula");
+        for (int i = 0; i < StartPage.WALLPAPER_IDS.length; i++) if (StartPage.WALLPAPER_IDS[i].equals(id)) return StartPage.WALLPAPER_NAMES[i];
+        return StartPage.WALLPAPER_NAMES[0];
+    }
+
+    private void chooseWallpaper() {
+        String id = prefs.getString("home_wallpaper", theme.isGx() ? "synthwave" : "nebula");
+        int checked = 0;
+        for (int i = 0; i < StartPage.WALLPAPER_IDS.length; i++) if (StartPage.WALLPAPER_IDS[i].equals(id)) checked = i;
+        choose("Start page wallpaper", StartPage.WALLPAPER_NAMES, checked, w -> {
+            prefs.edit().putString("home_wallpaper", StartPage.WALLPAPER_IDS[w]).apply();
+            refreshStartPages();
+        });
+    }
+
+    private void chooseNavStyle() {
+        choose("Navigation style", new String[]{"Bottom toolbar", "Fast Action Button (GX)"}, fabMode() ? 1 : 0, w -> {
+            prefs.edit().putString("nav_style", w == 1 ? "fab" : "bar").apply();
+            layoutChrome();
+            if (w == 1) toast("Tap the button for actions · swipe ← → for back/forward · swipe ↑ for tabs");
+        });
+    }
+
+    // ================================================================== settings
+
+    void showSettings() {
+        final Page p = new Page("Settings");
+        LinearLayout b = p.body;
+
+        sectionTitle(b, "Appearance");
+        rowCard(b, "Theme", theme.name, () -> { p.dismiss(); showThemes(); });
+        rowCard(b, "Navigation style", fabMode() ? "Fast Action Button (GX)" : "Bottom toolbar", () -> { p.dismiss(); chooseNavStyle(); });
+        rowCard(b, "Address bar position", addressBottom() ? "Bottom" : "Top", () -> {
+            p.dismiss();
+            choose("Address bar position", new String[]{"Top", "Bottom"}, addressBottom() ? 1 : 0, w -> {
+                prefs.edit().putString("address_position", w == 1 ? "bottom" : "top").apply();
+                layoutChrome();
+            });
+        });
+        rowCard(b, "Start page", "Wallpaper, stats, clock, speed dial, GX Corner", () -> { p.dismiss(); showStartCustomization(); });
+        rowCard(b, "Text size", prefs.getInt("text_zoom", 100) + "%", () -> {
+            p.dismiss();
+            final int[] sizes = {85, 100, 115, 130, 150, 175};
+            String[] labels = new String[sizes.length];
+            int checked = 1;
+            for (int i = 0; i < sizes.length; i++) { labels[i] = sizes[i] + "%"; if (sizes[i] == prefs.getInt("text_zoom", 100)) checked = i; }
+            choose("Text size", labels, checked, w -> { prefs.edit().putInt("text_zoom", sizes[w]).apply(); applyAllSettings(); });
+        });
+        switchRow(b, "Night mode for websites", "Darkens light web pages", "night_mode", false, () -> { applyAllSettings(); reload(); });
+        switchRow(b, "GX sounds", "Interface sound effects", "gx_sounds", true, () -> {
+            if (prefs.getBoolean("gx_sounds", true)) { if (sounds == null) sounds = new GxSounds(); }
+            else if (sounds != null) { sounds.release(); sounds = null; }
+        });
+        switchRow(b, "Haptic feedback", "Vibrate lightly on taps", "gx_haptics", true, null);
+
+        sectionTitle(b, "Search");
+        rowCard(b, "Search engine", StartPage.engineName(prefs.getString("search_engine", "brave")), () -> {
+            p.dismiss();
+            choose("Search engine", StartPage.ENGINE_NAMES, StartPage.engineIndex(prefs.getString("search_engine", "brave")), w -> {
+                prefs.edit().putString("search_engine", StartPage.ENGINE_IDS[w]).apply();
+                refreshStartPages();
+            });
+        });
+        switchRow(b, "Search suggestions", "Ask your search engine for suggestions while typing", "suggestions", !incognito, null);
+
+        sectionTitle(b, "Shields & privacy");
+        switchRow(b, "Shields", "Block ads and trackers on all sites", "shield_enabled", true, this::refreshShieldChrome);
+        rowCard(b, "Blocking mode", shields.aggressive() ? "Aggressive" : "Standard", () -> {
+            p.dismiss();
+            choose("Blocking mode", new String[]{"Standard", "Aggressive"}, shields.aggressive() ? 1 : 0,
+                w -> prefs.edit().putString("shield_mode", w == 1 ? "aggressive" : "standard").apply());
+        });
+        switchRow(b, "Hide ad elements", "Cosmetic filtering from EasyList & AdGuard", "shield_cosmetic", true, null);
+        switchRow(b, "Block fingerprinting", "Randomize canvas, audio and hardware signals", "shield_fingerprint", true, null);
+        rowCard(b, "Update filter lists", StartPage.formatCount(shields.ruleCount()) + " network rules", this::updateFilters);
+        rowCard(b, "Per-site Shields", shields.customizedSites().size() + " customized sites", () -> { p.dismiss(); showShieldSites(); });
+        rowCard(b, "Site permissions", "Camera, microphone and location", () -> { p.dismiss(); showSitePermissions(); });
+        rowCard(b, "Reset Shields statistics", StartPage.formatCount(shields.totalBlocked()) + " blocked so far", () -> {
+            shields.resetStats();
+            refreshStartPages();
+            toast("Statistics reset");
+        });
+        rowCard(b, "Clear browsing data", "History, cookies, site data and cache", () -> { p.dismiss(); clearDataDialog(); });
+        switchRow(b, "Clear site data on exit", "Wipe cookies and cache when you exit ASTER", "clear_on_exit", false, null);
+
+        sectionTitle(b, "Browsing");
+        switchRow(b, "Restore tabs on start", null, "restore_tabs", true, null);
+        switchRow(b, "Desktop site by default", null, "desktop_default", false, null);
+        switchRow(b, "Pull to refresh", null, "pull_refresh", true, this::applyAllSettings);
+        switchRow(b, "Background media playback", "Keep audio and video playing when ASTER is in the background", "background_play", false, null);
+        rowCard(b, "Translation language", translationName(prefs.getString("translate_language", "es")), () -> {
+            p.dismiss();
+            final String[] codes = {"es", "en", "sl", "it", "fr", "de", "pt", "ja", "ko", "zh-CN"};
+            String[] names = new String[codes.length];
+            int checked = 0;
+            for (int i = 0; i < codes.length; i++) { names[i] = translationName(codes[i]); if (codes[i].equals(prefs.getString("translate_language", "es"))) checked = i; }
+            choose("Translate pages to", names, checked, w -> prefs.edit().putString("translate_language", codes[w]).apply());
+        });
+        rowCard(b, "Reader mode style", "dark".equals(prefs.getString("reader_theme", "dark")) ? "Dark" : "Light (sepia)", () -> {
+            p.dismiss();
+            choose("Reader style", new String[]{"Dark", "Light (sepia)"}, "dark".equals(prefs.getString("reader_theme", "dark")) ? 0 : 1,
+                w -> prefs.edit().putString("reader_theme", w == 0 ? "dark" : "light").apply());
+        });
+
+        sectionTitle(b, "Data");
+        rowCard(b, "Backup & restore", "Bookmarks, history, speed dial, settings and tabs", () -> { p.dismiss(); showBackup(); });
+        rowCard(b, "Set as default browser", "Open Android's default apps settings", () -> {
+            try { startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)); }
+            catch (Exception e) { toast("Open Android Settings → Apps → Default apps"); }
+        });
+
+        sectionTitle(b, "About");
+        rowCard(b, "ASTER Browser " + BuildConfig.VERSION_NAME, "Engine: Android System WebView · " + Build.MODEL, null);
+        rowCard(b, "Check for updates", "Looks for new releases on GitHub", () -> { if (updater != null) updater.check(true); });
+        rowCard(b, "Source code", Updater.REPO_URL.replace("https://", ""), () -> { p.dismiss(); openInNewTab(Updater.REPO_URL, false); });
+        p.show();
+    }
+
+    private String translationName(String code) {
+        switch (code) {
+            case "en": return "English";
+            case "sl": return "Slovenščina";
+            case "it": return "Italiano";
+            case "fr": return "Français";
+            case "de": return "Deutsch";
+            case "pt": return "Português";
+            case "ja": return "日本語";
+            case "ko": return "한국어";
+            case "zh-CN": return "中文";
+            default: return "Español";
+        }
+    }
+
+    private void showStartCustomization() {
+        final String[] keys = {"home_show_stats", "home_show_clock", "home_show_shortcuts", "home_show_bookmarks", "home_show_gx_corner"};
+        final String[] labels = {"Shields statistics", "Clock & date", "Speed dial", "Bookmarks", "GX Corner (free games)"};
+        final boolean[] checked = new boolean[keys.length];
+        for (int i = 0; i < keys.length; i++) checked[i] = prefs.getBoolean(keys[i], true);
+        new AlertDialog.Builder(this).setTitle("Customize start page")
+            .setMultiChoiceItems(labels, checked, (d, w, on) -> checked[w] = on)
+            .setNeutralButton("Wallpaper…", (d, w) -> chooseWallpaper())
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save", (d, w) -> {
+                SharedPreferences.Editor e = prefs.edit();
+                for (int i = 0; i < keys.length; i++) e.putBoolean(keys[i], checked[i]);
+                e.apply();
+                refreshStartPages();
+                if (checked[4]) refreshGxCorner(false);
+            }).show();
+    }
+
+    private void showShieldSites() {
+        final List<String> sites = shields.customizedSites();
+        if (sites.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("Per-site Shields").setMessage("No sites have custom Shields settings yet.")
+                .setPositiveButton("OK", null).show();
+            return;
+        }
+        String[] labels = new String[sites.size()];
+        for (int i = 0; i < sites.size(); i++) {
+            String h = sites.get(i);
+            labels[i] = h + (shields.siteFlag(h, "up", true) ? "" : "  · Shields down") + (shields.siteFlag(h, "scripts", false) ? "  · scripts blocked" : "");
+        }
+        new AlertDialog.Builder(this).setTitle("Per-site Shields")
+            .setItems(labels, (d, w) -> new AlertDialog.Builder(this).setTitle(sites.get(w))
+                .setMessage("Reset this site to the global Shields settings?")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Reset", (dd, ww) -> { shields.resetSite(sites.get(w)); toast("Reset"); }).show())
+            .setPositiveButton("Close", null).show();
+    }
+
+    private void clearDataDialog() {
+        final String[] labels = {"Browsing history", "Cookies and site data", "Cached images and files", "Shields statistics"};
+        final boolean[] checked = {true, true, true, false};
+        new AlertDialog.Builder(this).setTitle("Clear browsing data")
+            .setMultiChoiceItems(labels, checked, (d, w, on) -> checked[w] = on)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Clear", (d, w) -> {
+                if (checked[0]) store.clearHistory();
+                if (checked[1]) {
+                    CookieManager.getInstance().removeAllCookies(null);
+                    WebStorage.getInstance().deleteAllData();
+                }
+                if (checked[2]) for (Tab t : tabs) if (t.web != null) { t.web.clearCache(true); break; }
+                if (checked[3]) shields.resetStats();
+                refreshStartPages();
+                toast("Browsing data cleared");
+            }).show();
+    }
+
+    private void wipeSiteData() {
+        try {
+            CookieManager.getInstance().removeAllCookies(null);
+            CookieManager.getInstance().flush();
+            WebStorage.getInstance().deleteAllData();
+            WebView tmp = new WebView(this);
+            tmp.clearCache(true);
+            tmp.destroy();
+        } catch (Exception ignored) { }
+    }
+
+    // ================================================================== bookmarks / history / downloads
+
+    void showBookmarks() {
+        final Page p = new Page("Bookmarks");
+        fillEntries(p, store.bookmarks, true, "");
+        p.show();
+    }
+
+    void showHistory() {
+        final Page p = new Page("History");
+        p.action("Clear", () -> new AlertDialog.Builder(this).setTitle("Clear all history?")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Clear", (d, w) -> { store.clearHistory(); p.dismiss(); toast("History cleared"); }).show());
+        fillEntries(p, store.history, false, "");
+        p.show();
+    }
+
+    private void fillEntries(final Page p, final List<Store.Entry> list, final boolean bookmarks, String filter) {
+        p.body.removeAllViews();
+        final EditText search = input(bookmarks ? "Search bookmarks" : "Search history", filter);
+        search.setBackground(shape(theme.surface, 16, 0));
+        search.setPadding(dp(14), dp(10), dp(14), dp(10));
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-1, -2);
+        sl.bottomMargin = dp(10);
+        p.body.addView(search, sl);
+        final LinearLayout results = new LinearLayout(this);
+        results.setOrientation(LinearLayout.VERTICAL);
+        p.body.addView(results);
+        final Runnable render = new Runnable() {
+            @Override public void run() {
+                results.removeAllViews();
+                String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
+                int shown = 0;
+                String lastDay = "";
+                for (final Store.Entry e : new ArrayList<>(list)) {
+                    if (!q.isEmpty() && !e.url.toLowerCase(Locale.ROOT).contains(q) && !e.label().toLowerCase(Locale.ROOT).contains(q)) continue;
+                    if (shown++ >= 300) break;
+                    if (!bookmarks && e.time > 0) {
+                        String day = android.text.format.DateFormat.getMediumDateFormat(MainActivity.this).format(new java.util.Date(e.time));
+                        if (!day.equals(lastDay)) { sectionTitle(results, day); lastDay = day; }
+                    }
+                    LinearLayout row = rowCard(results, e.label(), Store.hostOf(e.url), () -> { p.dismiss(); openUrlFromList(e.url); });
+                    row.setOnLongClickListener(v -> { entryMenu(p, list, bookmarks, e, this); return true; });
+                }
+                if (shown == 0) {
+                    TextView empty = text(bookmarks ? "No bookmarks yet. Tap ☆ in the menu to save a page." : "No history yet.", 13, theme.muted);
+                    empty.setPadding(dp(6), dp(20), dp(6), 0);
+                    results.addView(empty);
+                }
+            }
         };
-        new AlertDialog.Builder(this).setTitle("Browser settings").setItems(items, (d, which) -> {
-            if (which == 0) chooseSearchEngine();
-            else if (which == 1) editHomepage();
-            else if (which == 2) showStartPageCustomization();
-            else if (which == 3) showThemePicker();
-            else if (which == 4) showSitePermissionsManager();
-            else if (which == 5) toggleDesktopSite();
-            else if (which == 6) chooseTextSize();
-            else if (which == 7) chooseTranslationLanguage();
-            else if (which == 8) chooseRestoreTabs();
-            else if (which == 9) {
-                Toast.makeText(this, "Checking for updates…", Toast.LENGTH_SHORT).show();
-                checkForUpdates(true);
-            } else if (which == 10) {
-                new AlertDialog.Builder(this).setTitle("ASTER Browser")
-                    .setMessage("Version " + BuildConfig.VERSION_NAME + "\nIncludes theme presets, isolated private browsing on Android 9+, per-site runtime permission prompts and strict TLS certificate blocking.")
-                    .setPositiveButton("Check now", (dialog, button) -> checkForUpdates(true))
-                    .setNegativeButton("Close", null).show();
+        search.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void afterTextChanged(Editable s) { render.run(); }
+        });
+        render.run();
+    }
+
+    private void entryMenu(final Page p, final List<Store.Entry> list, final boolean bookmarks, final Store.Entry e, final Runnable refresh) {
+        List<String> labels = new ArrayList<>();
+        labels.add("Open in new tab");
+        labels.add("Open in private tab");
+        labels.add("Copy link");
+        if (bookmarks) labels.add("Edit");
+        labels.add(bookmarks ? "Delete bookmark" : "Remove from history");
+        if (!bookmarks) labels.add("Add to speed dial");
+        new AlertDialog.Builder(this).setTitle(e.label()).setItems(labels.toArray(new String[0]), (d, w) -> {
+            String choice = labels.get(w);
+            switch (choice) {
+                case "Open in new tab": p.dismiss(); openInNewTab(e.url, false); break;
+                case "Open in private tab": openPrivate(e.url); break;
+                case "Copy link": copy(e.url); break;
+                case "Edit": editBookmark(e, refresh); break;
+                case "Add to speed dial":
+                    store.speedDial.add(new Store.Entry(e.label(), e.url, 0));
+                    store.saveSpeedDial();
+                    refreshStartPages();
+                    toast("Added to speed dial");
+                    break;
+                default:
+                    if (incognito) { toast("Can't change saved data from a private window"); return; }
+                    list.remove(e);
+                    if (bookmarks) store.saveBookmarks(); else store.saveHistory();
+                    refresh.run();
+                    break;
             }
         }).show();
     }
 
-    private void chooseTextSize() {
-        final int[] values = {85, 100, 115, 130, 150};
-        String[] labels = {"85% — Compact", "100% — Normal", "115% — Large", "130% — Very large", "150% — Extra large"};
-        int currentValue = prefs.getInt("text_zoom", 100);
-        int checked = 1;
-        for (int i = 0; i < values.length; i++) if (values[i] == currentValue) checked = i;
-        new AlertDialog.Builder(this).setTitle("Web page text size")
-            .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                prefs.edit().putInt("text_zoom", values[which]).apply();
-                for (WebView tab : tabs) tab.getSettings().setTextZoom(values[which]);
-                dialog.dismiss();
-            }).setNegativeButton("Cancel", null).show();
-    }
-
-    private void chooseTranslationLanguage() {
-        String[] labels = {"Spanish", "English", "Slovenian", "Japanese", "Korean", "French", "German"};
-        String[] values = {"es", "en", "sl", "ja", "ko", "fr", "de"};
-        String currentValue = prefs.getString("translate_language", "es");
-        int checked = 0;
-        for (int i = 0; i < values.length; i++) if (values[i].equals(currentValue)) checked = i;
-        new AlertDialog.Builder(this).setTitle("Translate pages into")
-            .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                prefs.edit().putString("translate_language", values[which]).apply();
-                dialog.dismiss();
-            }).setNegativeButton("Cancel", null).show();
-    }
-
-    private String translationLanguageName(String code) {
-        String[] values = {"es", "en", "sl", "ja", "ko", "fr", "de"};
-        String[] labels = {"Spanish", "English", "Slovenian", "Japanese", "Korean", "French", "German"};
-        for (int i = 0; i < values.length; i++) if (values[i].equals(code)) return labels[i];
-        return "Spanish";
-    }
-
-    private void toggleDesktopSite() {
-        boolean enabled = !prefs.getBoolean("desktop_site", false);
-        prefs.edit().putBoolean("desktop_site", enabled).apply();
-        for (WebView tab : tabs) {
-            applyDesktopUserAgent(tab.getSettings());
-            if (isWebUrl(tab.getUrl())) tab.reload();
-        }
-        Toast.makeText(this, enabled ? "Desktop site enabled" : "Mobile site enabled", Toast.LENGTH_SHORT).show();
-    }
-
-    private void applyDesktopUserAgent(WebSettings settings) {
-        String mobileAgent = WebSettings.getDefaultUserAgent(this);
-        if (!prefs.getBoolean("desktop_site", false)) {
-            settings.setUserAgentString(mobileAgent);
-            return;
-        }
-        String desktopAgent = mobileAgent.replaceFirst("\\(Linux; Android [^)]*\\)", "(X11; Linux x86_64)")
-            .replace(" Mobile", "");
-        settings.setUserAgentString(desktopAgent);
-    }
-
-    private void toggleReaderMode() {
-        if (tabs.isEmpty() || !isWebUrl(current().getUrl())) {
-            Toast.makeText(this, "Open an article or web page first", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        WebView target = current();
-        if (readerModeTabs.contains(target)) {
-            readerModeTabs.remove(target);
-            target.evaluateJavascript("(function(){var e=document.getElementById('__aster_reader');if(e)e.remove();return true;})()", null);
-            return;
-        }
-        String script = "(function(){"
-            + "if(document.getElementById('__aster_reader'))return 'ASTER_READER_READY';"
-            + "var source=document.querySelector('article')||document.querySelector('main')||document.body;"
-            + "var text=(source&&source.innerText?source.innerText:document.body.innerText||'').trim();"
-            + "if(text.length<160)return 'ASTER_READER_SHORT';"
-            + "var overlay=document.createElement('div');overlay.id='__aster_reader';"
-            + "overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;overflow:auto;background:#f4f0e8;color:#25221e;padding:28px max(22px,calc((100vw - 720px)/2));font:18px/1.75 Georgia,serif;box-sizing:border-box;';"
-            + "var bar=document.createElement('div');bar.style.cssText='max-width:720px;margin:0 auto 24px;display:flex;justify-content:space-between;align-items:center;font:12px Arial,sans-serif;color:#6b6258;';"
-            + "var brand=document.createElement('span');brand.textContent='ASTER READER';"
-            + "var close=document.createElement('button');close.textContent='Close reader  ×';close.style.cssText='border:0;border-radius:18px;padding:10px 15px;background:#ded6c9;color:#29241e;font-weight:bold;';"
-            + "close.onclick=function(){overlay.remove();window.location.href='aster-reader-exit://close';};bar.appendChild(brand);bar.appendChild(close);overlay.appendChild(bar);"
-            + "var article=document.createElement('article');article.style.cssText='max-width:720px;margin:0 auto;white-space:pre-wrap;overflow-wrap:anywhere;';"
-            + "var title=document.createElement('h1');title.textContent=document.title||location.hostname;title.style.cssText='font: bold 32px/1.2 Georgia,serif;margin:0 0 26px;';"
-            + "var body=document.createElement('div');body.textContent=text.slice(0,60000);article.appendChild(title);article.appendChild(body);overlay.appendChild(article);document.body.appendChild(overlay);return 'ASTER_READER_READY';"
-            + "})()";
-        target.evaluateJavascript(script, result -> {
-            if (result != null && result.contains("ASTER_READER_READY")) {
-                readerModeTabs.add(target);
-                Toast.makeText(this, "Reader mode enabled", Toast.LENGTH_SHORT).show();
-            } else Toast.makeText(this, "This page has no readable article text", Toast.LENGTH_SHORT).show();
-        });
-    }
-
-    private void translateCurrentPage() {
-        String url = current().getUrl();
-        if (!isWebUrl(url)) {
-            Toast.makeText(this, "Open a website first", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        try {
-            String language = prefs.getString("translate_language", "es");
-            String translateUrl = "https://translate.google.com/translate?sl=auto&tl="
-                + language + "&u=" + URLEncoder.encode(url, "UTF-8");
-            addTab(translateUrl);
-        } catch (Exception e) {
-            Toast.makeText(this, "Could not prepare translation", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void chooseSearchEngine() {
-        String[] names = {"Google", "DuckDuckGo", "Bing"};
-        String[] keys = {"google", "duckduckgo", "bing"};
-        String selected = prefs.getString("search_engine", "google");
-        int checked = 0;
-        for (int i = 0; i < keys.length; i++) if (keys[i].equals(selected)) checked = i;
-        new AlertDialog.Builder(this).setTitle("Default search engine")
-            .setSingleChoiceItems(names, checked, (dialog, which) -> {
-                prefs.edit().putString("search_engine", keys[which]).apply();
-                dialog.dismiss();
-                Toast.makeText(this, names[which] + " selected", Toast.LENGTH_SHORT).show();
-            }).setNegativeButton("Cancel", null).show();
-    }
-
-    private void editHomepage() {
-        EditText input = new EditText(this);
-        input.setSingleLine(true);
-        input.setHint("https://example.com");
-        input.setText(getHomepage());
-        input.setSelection(input.getText().length());
-        new AlertDialog.Builder(this).setTitle("Set homepage").setView(input)
+    private void editBookmark(final Store.Entry e, final Runnable refresh) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        final EditText name = input("Name", e.title);
+        final EditText url = input("URL", e.url);
+        box.addView(name);
+        box.addView(url);
+        new AlertDialog.Builder(this).setTitle("Edit bookmark").setView(box)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Save", (d, w) -> {
-                String value = input.getText().toString().trim();
-                if (value.isEmpty() || value.contains(" ")) {
-                    Toast.makeText(this, "Enter a valid web address", Toast.LENGTH_SHORT).show();
-                    return;
+                String u = webAddressOnly(url.getText().toString());
+                if (u == null) { toast("Enter a valid web address"); return; }
+                e.title = name.getText().toString().trim();
+                e.url = u;
+                store.saveBookmarks();
+                refresh.run();
+            }).show();
+    }
+
+    private void openUrlFromList(String url) {
+        Tab t = current();
+        if (t != null) load(t, url); else openInNewTab(url, false);
+    }
+
+    void showDownloads() {
+        final Page p = new Page("Downloads");
+        p.action("Folder", () -> {
+            try { startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)); } catch (Exception e) { toast("No downloads app found"); }
+        });
+        final DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+        int shown = 0;
+        if (dm != null && !store.downloads.isEmpty()) {
+            long[] ids = new long[store.downloads.size()];
+            for (int i = 0; i < ids.length; i++) ids[i] = store.downloads.get(i);
+            Cursor c = null;
+            try {
+                c = dm.query(new DownloadManager.Query().setFilterById(ids));
+                while (c != null && c.moveToNext()) {
+                    final long id = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_ID));
+                    String title = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TITLE));
+                    int status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                    long size = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                    long done = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                    String state;
+                    switch (status) {
+                        case DownloadManager.STATUS_SUCCESSFUL: state = "Completed · " + StartPage.formatBytes(size); break;
+                        case DownloadManager.STATUS_FAILED: state = "Failed"; break;
+                        case DownloadManager.STATUS_PAUSED: state = "Paused"; break;
+                        default: state = size > 0 ? "Downloading " + (done * 100 / size) + "% · " + StartPage.formatBytes(size) : "Downloading…"; break;
+                    }
+                    final boolean ok = status == DownloadManager.STATUS_SUCCESSFUL;
+                    rowCard(p.body, "⬇  " + (title == null ? "File" : title), state, () -> { if (ok) openDownload(dm, id); });
+                    shown++;
                 }
-                if (!value.regionMatches(true, 0, "https://", 0, 8)
-                    && !value.regionMatches(true, 0, "http://", 0, 7)) value = "https://" + value;
-                prefs.edit().putString("homepage", value).apply();
-                Toast.makeText(this, "Homepage updated", Toast.LENGTH_SHORT).show();
-            }).show();
-    }
-
-    private void chooseRestoreTabs() {
-        boolean enabled = prefs.getBoolean("restore_tabs", true);
-        String[] options = {"On", "Off"};
-        new AlertDialog.Builder(this).setTitle("Restore tabs on startup")
-            .setSingleChoiceItems(options, enabled ? 0 : 1, (dialog, which) -> {
-                prefs.edit().putBoolean("restore_tabs", which == 0).apply();
-                dialog.dismiss();
-            }).setNegativeButton("Cancel", null).show();
-    }
-
-    private void confirmClearBrowsingData() {
-        new AlertDialog.Builder(this).setTitle("Clear browsing data?")
-            .setMessage("This removes saved history, cookies, cached files and website data. Your bookmarks will remain.")
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Clear", (d, w) -> clearBrowsingData()).show();
-    }
-
-    private void clearBrowsingData() {
-        prefs.edit().remove("history").apply();
-        CookieManager cookies = CookieManager.getInstance();
-        cookies.removeAllCookies(null);
-        cookies.flush();
-        WebStorage.getInstance().deleteAllData();
-        for (WebView tab : tabs) {
-            tab.clearCache(true);
-            tab.clearHistory();
-            tab.clearFormData();
+            } catch (Exception ignored) {
+            } finally {
+                if (c != null) c.close();
+            }
         }
-        Toast.makeText(this, "Browsing data cleared", Toast.LENGTH_SHORT).show();
+        if (shown == 0) {
+            TextView empty = text("Files you download with ASTER will appear here.", 13, theme.muted);
+            empty.setPadding(dp(6), dp(20), dp(6), 0);
+            p.body.addView(empty);
+        }
+        p.show();
     }
 
-    private void confirmDownload(String url, String userAgent, String contentDisposition, String mimeType) {
-        pendingDownloadUrl = url;
-        pendingDownloadUserAgent = userAgent;
-        pendingDownloadDisposition = contentDisposition;
-        pendingDownloadMime = mimeType;
-        String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
-        new AlertDialog.Builder(this)
-            .setTitle("Download file?")
-            .setMessage(fileName + "\n\nSave to your Downloads folder?")
-            .setNegativeButton("Cancel", (d, w) -> clearPendingDownload())
-            .setPositiveButton("Download", (d, w) -> {
-                if (Build.VERSION.SDK_INT <= 28 &&
-                    checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, DOWNLOAD_PERMISSION_REQUEST);
-                } else startPendingDownload();
-            }).show();
-    }
-
-    private void startPendingDownload() {
-        if (pendingDownloadUrl == null) return;
+    private void openDownload(DownloadManager dm, long id) {
         try {
-            String fileName = URLUtil.guessFileName(pendingDownloadUrl, pendingDownloadDisposition, pendingDownloadMime);
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(pendingDownloadUrl));
-            request.setTitle(fileName);
-            request.setDescription("Downloading with ASTER Browser");
-            if (pendingDownloadMime != null && !pendingDownloadMime.trim().isEmpty()) {
-                request.setMimeType(pendingDownloadMime);
-            }
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
-            if (pendingDownloadUserAgent != null) request.addRequestHeader("User-Agent", pendingDownloadUserAgent);
-            String cookies = CookieManager.getInstance().getCookie(pendingDownloadUrl);
-            if (cookies != null) request.addRequestHeader("Cookie", cookies);
-            DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-            if (manager == null) throw new IllegalStateException("Download service unavailable");
-            manager.enqueue(request);
-            Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show();
+            Uri uri = dm.getUriForDownloadedFile(id);
+            String mime = dm.getMimeTypeForDownloadedFile(id);
+            Intent i = new Intent(Intent.ACTION_VIEW);
+            i.setDataAndType(uri, mime == null ? "*/*" : mime);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(i);
         } catch (Exception e) {
-            Toast.makeText(this, "Could not start download: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            toast("No app can open this file");
         }
-        clearPendingDownload();
     }
 
-    private void clearPendingDownload() {
-        pendingDownloadUrl = null;
-        pendingDownloadUserAgent = null;
-        pendingDownloadDisposition = null;
-        pendingDownloadMime = null;
-    }
+    // ================================================================== speed dial
 
-    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == SITE_MEDIA_PERMISSION_REQUEST) {
-            grantPendingMediaPermission();
-            return;
-        }
-        if (requestCode == SITE_LOCATION_PERMISSION_REQUEST) {
-            boolean granted = hasLocationPermission();
-            finishPendingLocationPermission(granted);
-            return;
-        }
-        if (requestCode == DOWNLOAD_PERMISSION_REQUEST) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startPendingDownload();
-            } else {
-                Toast.makeText(this, "Storage permission is required for this Android version", Toast.LENGTH_LONG).show();
-                clearPendingDownload();
+    private void showDialManager() {
+        final Page p = new Page("Speed dial");
+        p.action("Add", () -> { p.dismiss(); editDial(-1); });
+        for (int i = 0; i < store.speedDial.size(); i++) {
+            final int index = i;
+            Store.Entry e = store.speedDial.get(i);
+            LinearLayout row = rowCard(p.body, e.label(), Store.hostOf(e.url), () -> { p.dismiss(); editDial(index); });
+            if (i > 0) {
+                TextView up = bold("↑", 18, theme.muted);
+                up.setPadding(dp(10), dp(4), dp(10), dp(4));
+                onTap(up, () -> {
+                    Collections.swap(store.speedDial, index, index - 1);
+                    store.saveSpeedDial();
+                    p.dismiss();
+                    refreshStartPages();
+                    showDialManager();
+                });
+                row.addView(up);
             }
         }
+        p.show();
     }
 
-    private boolean isSecureOrigin(String origin) {
-        return origin != null && origin.regionMatches(true, 0, "https://", 0, 8);
+    void editDial(final int index) {
+        if (incognito) { toast("Edit speed dial from a normal window"); return; }
+        final Store.Entry existing = index >= 0 && index < store.speedDial.size() ? store.speedDial.get(index) : null;
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        final EditText name = input("Name", existing == null ? "" : existing.title);
+        final EditText url = input("Web address", existing == null ? "" : existing.url);
+        box.addView(name);
+        box.addView(url);
+        AlertDialog.Builder b = new AlertDialog.Builder(this)
+            .setTitle(existing == null ? "Add to speed dial" : "Edit shortcut")
+            .setView(box)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save", (d, w) -> {
+                String u = webAddressOnly(url.getText().toString());
+                if (u == null) { toast("Enter a valid web address"); return; }
+                String n = name.getText().toString().trim();
+                if (n.isEmpty()) n = Store.hostOf(u);
+                if (existing == null) store.speedDial.add(new Store.Entry(n, u, 0));
+                else { existing.title = n; existing.url = u; }
+                store.saveSpeedDial();
+                refreshStartPages();
+            });
+        if (existing != null) b.setNeutralButton("Remove", (d, w) -> {
+            store.speedDial.remove(existing);
+            store.saveSpeedDial();
+            refreshStartPages();
+        });
+        b.show();
     }
 
-    private void promptForMediaPermission(PermissionRequest request) {
+    // ================================================================== GX Corner
+
+    void refreshGxCorner(final boolean force) {
+        if (incognito || !prefs.getBoolean("home_show_gx_corner", true)) return;
+        long age = System.currentTimeMillis() - prefs.getLong("gx_corner_time", 0L);
+        if (!force && age < 6L * 60L * 60L * 1000L && !prefs.getString("gx_corner_cache", "").isEmpty()) return;
+        if (force) toast("Refreshing GX Corner…");
+        new Thread(() -> {
+            HttpURLConnection c = null;
+            try {
+                c = (HttpURLConnection) new URL(GX_CORNER_API).openConnection();
+                c.setConnectTimeout(10000);
+                c.setReadTimeout(15000);
+                c.setRequestProperty("Accept", "application/json");
+                c.setRequestProperty("User-Agent", "ASTER-Browser/" + BuildConfig.VERSION_NAME);
+                if (c.getResponseCode() != 200) return;
+                String body = new String(Store.readAll(c.getInputStream(), 4 * 1024 * 1024), "UTF-8").trim();
+                if (!body.startsWith("[")) return;
+                JSONArray all = new JSONArray(body);
+                JSONArray slim = new JSONArray();
+                for (int i = 0; i < all.length() && slim.length() < 15; i++) {
+                    JSONObject g = all.optJSONObject(i);
+                    if (g == null) continue;
+                    JSONObject o = new JSONObject();
+                    o.put("title", g.optString("title"));
+                    o.put("worth", g.optString("worth"));
+                    o.put("thumbnail", g.optString("thumbnail"));
+                    o.put("platforms", g.optString("platforms"));
+                    o.put("open_giveaway_url", g.optString("open_giveaway_url"));
+                    o.put("gamerpower_url", g.optString("gamerpower_url"));
+                    slim.put(o);
+                }
+                final String json = slim.toString();
+                prefs.edit().putString("gx_corner_cache", json).putLong("gx_corner_time", System.currentTimeMillis()).apply();
+                ui.post(this::refreshStartPages);
+            } catch (Exception ignored) {
+            } finally {
+                if (c != null) c.disconnect();
+            }
+        }, "ASTER-gx-corner").start();
+    }
+
+    // ================================================================== voice
+
+    private void startVoice() {
+        Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH);
+        i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Search with your voice");
+        try { startActivityForResult(i, REQ_VOICE); } catch (ActivityNotFoundException e) { toast("Voice search isn't available on this device"); }
+    }
+
+    // ================================================================== backup
+
+    private static final String[] BACKUP_STRINGS = {"ui_theme", "search_engine", "home_wallpaper", "nav_style", "address_position",
+        "translate_language", "shield_mode", "reader_theme"};
+    private static final String[] BACKUP_BOOLS = {"shield_enabled", "shield_cosmetic", "shield_fingerprint", "home_show_stats",
+        "home_show_clock", "home_show_shortcuts", "home_show_bookmarks", "home_show_gx_corner", "night_mode", "gx_sounds",
+        "gx_haptics", "suggestions", "restore_tabs", "background_play", "pull_refresh", "desktop_default", "data_saver",
+        "gx_ram_limiter", "clear_on_exit"};
+    private static final String[] BACKUP_INTS = {"text_zoom", "gx_max_live"};
+
+    private void showBackup() {
+        if (incognito) { toast("Use a normal window for backups"); return; }
+        new AlertDialog.Builder(this).setTitle("Backup & restore")
+            .setMessage("Export bookmarks, history, speed dial, Shields settings, preferences and open tabs to a JSON file you control. Cookies and passwords are never included.")
+            .setNegativeButton("Import", (d, w) -> {
+                Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.setType("*/*");
+                try { startActivityForResult(i, REQ_IMPORT); } catch (Exception e) { toast("No file picker available"); }
+            })
+            .setPositiveButton("Export", (d, w) -> {
+                Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.setType("application/json");
+                i.putExtra(Intent.EXTRA_TITLE, "aster-backup.json");
+                try { startActivityForResult(i, REQ_EXPORT); } catch (Exception e) { toast("No file picker available"); }
+            })
+            .setNeutralButton("Close", null).show();
+    }
+
+    private void exportBackup(Uri uri) {
+        try {
+            JSONObject b = new JSONObject();
+            b.put("format", "ASTER_BROWSER_BACKUP");
+            b.put("version", 2);
+            b.put("app_version", BuildConfig.VERSION_NAME);
+            b.put("exported_at", System.currentTimeMillis());
+            b.put("bookmarks", store.toJson(store.bookmarks));
+            b.put("history", store.toJson(store.history));
+            b.put("speed_dial", store.toJson(store.speedDial));
+            b.put("shield_sites", shields.exportSites());
+            JSONObject s = new JSONObject();
+            for (String k : BACKUP_STRINGS) if (prefs.contains(k)) s.put(k, prefs.getString(k, ""));
+            for (String k : BACKUP_BOOLS) if (prefs.contains(k)) s.put(k, prefs.getBoolean(k, false));
+            for (String k : BACKUP_INTS) if (prefs.contains(k)) s.put(k, prefs.getInt(k, 0));
+            b.put("settings", s);
+            JSONArray open = new JSONArray();
+            for (Tab t : tabs) if (!t.start && Store.isWeb(t.url)) open.put(t.url);
+            b.put("session_tabs", open);
+            try (OutputStream out = getContentResolver().openOutputStream(uri, "w")) {
+                if (out == null) throw new IllegalStateException("Can't write file");
+                out.write(b.toString(2).getBytes("UTF-8"));
+            }
+            toast("Backup exported");
+        } catch (Exception e) {
+            toast("Backup export failed");
+        }
+    }
+
+    private void importBackup(Uri uri) {
+        try {
+            byte[] bytes;
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                if (in == null) throw new IllegalStateException("Can't read file");
+                bytes = Store.readAll(in, 20 * 1024 * 1024);
+            }
+            final JSONObject b = new JSONObject(new String(bytes, "UTF-8"));
+            if (!"ASTER_BROWSER_BACKUP".equals(b.optString("format"))) throw new IllegalStateException("Not an ASTER backup");
+            new AlertDialog.Builder(this).setTitle("Restore backup?")
+                .setMessage("This replaces your bookmarks, history, speed dial and settings with the backup's contents.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Restore", (d, w) -> applyBackup(b)).show();
+        } catch (Exception e) {
+            toast("This file isn't a valid ASTER backup");
+        }
+    }
+
+    private void applyBackup(JSONObject b) {
+        int version = b.optInt("version", 1);
+        if (version >= 2) {
+            store.replace(store.bookmarks, b.optJSONArray("bookmarks"), 10000);
+            store.replace(store.history, b.optJSONArray("history"), Store.MAX_HISTORY);
+            JSONArray dial = b.optJSONArray("speed_dial");
+            if (dial != null) store.replace(store.speedDial, dial, 60);
+            shields.importSites(b.optJSONObject("shield_sites"));
+        } else {
+            store.bookmarks.clear();
+            for (String line : b.optString("bookmarks", "").split("\n")) if (Store.isWeb(line.trim())) store.bookmarks.add(new Store.Entry(Store.hostOf(line.trim()), line.trim(), System.currentTimeMillis()));
+            store.history.clear();
+            for (String line : b.optString("history", "").split("\n")) if (Store.isWeb(line.trim()) && store.history.size() < Store.MAX_HISTORY) store.history.add(new Store.Entry(Store.hostOf(line.trim()), line.trim(), 0));
+        }
+        store.saveBookmarks();
+        store.saveHistory();
+        store.saveSpeedDial();
+        JSONObject s = b.optJSONObject("settings");
+        if (s != null) {
+            SharedPreferences.Editor e = prefs.edit();
+            for (String k : BACKUP_STRINGS) if (s.has(k)) e.putString(k, s.optString(k));
+            for (String k : BACKUP_BOOLS) if (s.has(k)) e.putBoolean(k, s.optBoolean(k));
+            for (String k : BACKUP_INTS) if (s.has(k)) e.putInt(k, s.optInt(k));
+            e.apply();
+        }
+        JSONArray open = b.optJSONArray("session_tabs");
+        if (open != null) for (int i = 0; i < open.length() && tabs.size() < MAX_TABS; i++) {
+            String u = open.optString(i);
+            if (Store.isWeb(u)) {
+                Tab t = new Tab(u);
+                t.title = Store.hostOf(u);
+                tabs.add(t);
+            }
+        }
+        theme = Theme.byId(prefs.getString("ui_theme", "aster"));
+        applyTheme();
+        layoutChrome();
+        applyAllSettings();
+        refreshStartPages();
+        updateChrome();
+        toast("Backup restored");
+    }
+
+    // ================================================================== downloads
+
+    private void confirmDownload(String url, String agent, String disposition, String mime) {
+        if (url == null) return;
+        if (url.startsWith("blob:") || url.startsWith("data:")) {
+            toast("This page generates its file in the browser; ASTER can't save it yet");
+            return;
+        }
+        dlUrl = url;
+        dlAgent = agent;
+        dlDisposition = disposition;
+        dlMime = mime;
+        String name = URLUtil.guessFileName(url, disposition, mime);
+        new AlertDialog.Builder(this).setTitle("Download file?")
+            .setMessage(name + "\n\nSave to your Downloads folder?")
+            .setNegativeButton("Cancel", (d, w) -> dlUrl = null)
+            .setPositiveButton("Download", (d, w) -> {
+                if (Build.VERSION.SDK_INT <= 28 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_DOWNLOAD_PERM);
+                } else startDownload();
+            }).show();
+    }
+
+    private void startDownload() {
+        if (dlUrl == null) return;
+        try {
+            String name = URLUtil.guessFileName(dlUrl, dlDisposition, dlMime);
+            DownloadManager.Request r = new DownloadManager.Request(Uri.parse(dlUrl));
+            r.setTitle(name);
+            r.setDescription("ASTER Browser");
+            if (dlMime != null && !dlMime.trim().isEmpty()) r.setMimeType(dlMime);
+            r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            r.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name);
+            r.addRequestHeader("User-Agent", dlAgent != null ? dlAgent : userAgent(false));
+            String cookies = CookieManager.getInstance().getCookie(dlUrl);
+            if (cookies != null) r.addRequestHeader("Cookie", cookies);
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            long id = dm.enqueue(r);
+            store.addDownload(id);
+            toast("Downloading " + name);
+        } catch (Exception e) {
+            toast("Could not start download");
+        }
+        dlUrl = null;
+    }
+
+    // ================================================================== site permissions
+
+    private void promptMedia(final PermissionRequest request) {
         if (request == null) return;
-        String origin = request.getOrigin() == null ? "" : request.getOrigin().toString();
-        if (!isSecureOrigin(origin)) {
-            request.deny();
-            return;
+        final String origin = request.getOrigin() == null ? "" : request.getOrigin().toString();
+        if (!origin.startsWith("https://")) { request.deny(); return; }
+        final List<String> approved = new ArrayList<>();
+        boolean cam = false;
+        boolean mic = false;
+        for (String r : request.getResources()) {
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)) { approved.add(r); cam = true; }
+            else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) { approved.add(r); mic = true; }
+            else if (PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID.equals(r)) { approved.add(r); }
         }
-        List<String> approved = new ArrayList<>();
-        boolean camera = false;
-        boolean microphone = false;
-        for (String resource : request.getResources()) {
-            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
-                approved.add(resource);
-                camera = true;
-            } else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
-                approved.add(resource);
-                microphone = true;
-            }
-        }
-        if (approved.isEmpty()) {
-            request.deny();
-            return;
-        }
-        StringBuilder detail = new StringBuilder("Allow ");
-        if (camera && microphone) detail.append("camera and microphone");
-        else if (camera) detail.append("camera");
-        else detail.append("microphone");
-        detail.append(" access for ").append(origin).append("?");
-
-        boolean needsCamera = camera;
-        boolean needsMicrophone = microphone;
-        String[] resources = approved.toArray(new String[0]);
-        new AlertDialog.Builder(this)
-            .setTitle("Website permission")
-            .setMessage(detail.toString() + "\n\nAndroid may show a second system permission request.")
+        if (approved.isEmpty()) { request.deny(); return; }
+        if (!cam && !mic) { request.grant(approved.toArray(new String[0])); return; }
+        final boolean needCam = cam;
+        final boolean needMic = mic;
+        String what = cam && mic ? "camera and microphone" : (cam ? "camera" : "microphone");
+        new AlertDialog.Builder(this).setTitle("Website permission")
+            .setMessage("Allow " + origin + " to use your " + what + "?")
             .setNegativeButton("Block", (d, w) -> request.deny())
             .setPositiveButton("Allow", (d, w) -> {
-                pendingMediaPermissionRequest = request;
-                pendingMediaPermissionOrigin = origin;
-                pendingMediaPermissionResources = resources;
+                pendingMedia = request;
+                pendingMediaOrigin = origin;
+                pendingMediaResources = approved.toArray(new String[0]);
                 List<String> missing = new ArrayList<>();
-                if (needsCamera && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                    missing.add(Manifest.permission.CAMERA);
-                }
-                if (needsMicrophone && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    missing.add(Manifest.permission.RECORD_AUDIO);
-                }
-                if (!missing.isEmpty()) requestPermissions(missing.toArray(new String[0]), SITE_MEDIA_PERMISSION_REQUEST);
-                else grantPendingMediaPermission();
+                if (needCam && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) missing.add(Manifest.permission.CAMERA);
+                if (needMic && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) missing.add(Manifest.permission.RECORD_AUDIO);
+                if (!missing.isEmpty()) requestPermissions(missing.toArray(new String[0]), REQ_MEDIA_PERM);
+                else grantMedia();
             }).show();
     }
 
-    private void grantPendingMediaPermission() {
-        PermissionRequest request = pendingMediaPermissionRequest;
-        String origin = pendingMediaPermissionOrigin;
-        String[] resources = pendingMediaPermissionResources;
-        pendingMediaPermissionRequest = null;
-        pendingMediaPermissionOrigin = null;
-        pendingMediaPermissionResources = null;
-        if (request == null || resources == null) return;
-        boolean allowed = true;
-        for (String resource : resources) {
-            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)
-                && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) allowed = false;
-            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)
-                && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) allowed = false;
+    private void grantMedia() {
+        PermissionRequest r = pendingMedia;
+        String[] res = pendingMediaResources;
+        String origin = pendingMediaOrigin;
+        pendingMedia = null;
+        pendingMediaResources = null;
+        pendingMediaOrigin = null;
+        if (r == null || res == null) return;
+        List<String> ok = new ArrayList<>();
+        for (String s : res) {
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(s) && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) continue;
+            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(s) && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) continue;
+            ok.add(s);
         }
-        if (allowed) {
-            request.grant(resources);
-            for (String resource : resources) {
-                if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) rememberSitePermission("Camera", origin);
-                if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) rememberSitePermission("Microphone", origin);
-            }
-        } else {
-            request.deny();
-            Toast.makeText(this, "Android permission was not granted", Toast.LENGTH_SHORT).show();
+        if (ok.isEmpty()) { r.deny(); toast("Android permission was not granted"); return; }
+        r.grant(ok.toArray(new String[0]));
+        for (String s : ok) {
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(s)) rememberPermission("Camera", origin);
+            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(s)) rememberPermission("Microphone", origin);
         }
     }
 
-    private void promptForLocationPermission(String origin, GeolocationPermissions.Callback callback) {
-        if (callback == null) return;
-        if (!isSecureOrigin(origin)) {
-            callback.invoke(origin, false, false);
-            return;
-        }
-        new AlertDialog.Builder(this)
-            .setTitle("Location permission")
-            .setMessage("Allow " + origin + " to access your device location? You can revoke this later in ASTER or Android settings.")
-            .setNegativeButton("Block", (d, w) -> callback.invoke(origin, false, false))
+    private void promptLocation(final String origin, final GeolocationPermissions.Callback cb) {
+        if (cb == null) return;
+        if (origin == null || !origin.startsWith("https://")) { cb.invoke(origin, false, false); return; }
+        new AlertDialog.Builder(this).setTitle("Location permission")
+            .setMessage("Allow " + origin + " to access your location?")
+            .setNegativeButton("Block", (d, w) -> cb.invoke(origin, false, false))
             .setPositiveButton("Allow", (d, w) -> {
-                pendingLocationOrigin = origin;
-                pendingLocationCallback = callback;
-                if (hasLocationPermission()) {
-                    finishPendingLocationPermission(true);
-                } else {
-                    requestPermissions(new String[]{
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    }, SITE_LOCATION_PERMISSION_REQUEST);
-                }
+                pendingGeo = cb;
+                pendingGeoOrigin = origin;
+                if (hasLocation()) finishLocation(true);
+                else requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_LOCATION_PERM);
             }).show();
     }
 
-    private boolean hasLocationPermission() {
+    private boolean hasLocation() {
         return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
-    private void finishPendingLocationPermission(boolean granted) {
-        GeolocationPermissions.Callback callback = pendingLocationCallback;
-        String origin = pendingLocationOrigin;
-        pendingLocationCallback = null;
-        pendingLocationOrigin = null;
-        if (callback != null && origin != null) callback.invoke(origin, granted, false);
-        if (granted && origin != null) rememberSitePermission("Location", origin);
+    private void finishLocation(boolean granted) {
+        GeolocationPermissions.Callback cb = pendingGeo;
+        String origin = pendingGeoOrigin;
+        pendingGeo = null;
+        pendingGeoOrigin = null;
+        if (cb != null && origin != null) cb.invoke(origin, granted, granted && !incognito);
+        if (granted && origin != null) rememberPermission("Location", origin);
     }
 
-    private void rememberSitePermission(String type, String origin) {
-        Set<String> entries = new LinkedHashSet<>(prefs.getStringSet("site_permission_log", new LinkedHashSet<>()));
-        entries.remove(type + "||" + origin);
-        entries.add(type + "||" + origin);
-        prefs.edit().putStringSet("site_permission_log", entries).apply();
+    private void rememberPermission(String type, String origin) {
+        if (incognito) return;
+        java.util.Set<String> set = new java.util.LinkedHashSet<>(prefs.getStringSet("site_permission_log", new java.util.LinkedHashSet<String>()));
+        set.add(type + "||" + origin);
+        prefs.edit().putStringSet("site_permission_log", set).apply();
     }
 
-    private void showSitePermissionsManager() {
-        Set<String> saved = new LinkedHashSet<>(prefs.getStringSet("site_permission_log", new LinkedHashSet<>()));
-        List<String> entries = new ArrayList<>(saved);
+    private void showSitePermissions() {
+        final List<String> entries = new ArrayList<>(prefs.getStringSet("site_permission_log", new java.util.LinkedHashSet<String>()));
         if (entries.isEmpty()) {
-            new AlertDialog.Builder(this)
-                .setTitle("Site permissions")
-                .setMessage("ASTER has not granted camera, microphone or location access to any website yet. Every request is shown before access is granted.")
-                .setPositiveButton("Android app permissions", (d, w) -> openAndroidPermissionSettings())
+            new AlertDialog.Builder(this).setTitle("Site permissions")
+                .setMessage("No website has been given camera, microphone or location access.")
+                .setPositiveButton("Android app permissions", (d, w) -> openAppSettings())
                 .setNegativeButton("Close", null).show();
             return;
         }
         String[] labels = new String[entries.size()];
-        for (int i = 0; i < entries.size(); i++) labels[i] = entries.get(i).replace("||", "  ·  ");
-        new AlertDialog.Builder(this)
-            .setTitle("Recent website grants")
-            .setItems(labels, (dialog, which) -> {
-                String[] parts = entries.get(which).split("\\|\\|", 2);
-                String type = parts[0];
-                String origin = parts.length > 1 ? parts[1] : "";
-                new AlertDialog.Builder(this)
-                    .setTitle("Manage " + type)
-                    .setMessage(origin + "\n\nRemove this remembered record? Location access will also be revoked for this origin. Camera and microphone are additionally controlled by Android's app-level permission settings.")
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Remove", (d, w) -> {
-                        if ("Location".equals(type)) GeolocationPermissions.getInstance().clear(origin);
-                        Set<String> updated = new LinkedHashSet<>(prefs.getStringSet("site_permission_log", new LinkedHashSet<>()));
-                        updated.remove(entries.get(which));
-                        prefs.edit().putStringSet("site_permission_log", updated).apply();
-                        Toast.makeText(this, "Permission record removed", Toast.LENGTH_SHORT).show();
-                    })
-                    .setNeutralButton("Android settings", (d, w) -> openAndroidPermissionSettings())
-                    .show();
+        for (int i = 0; i < labels.length; i++) labels[i] = entries.get(i).replace("||", "  ·  ");
+        new AlertDialog.Builder(this).setTitle("Site permissions")
+            .setItems(labels, (d, w) -> {
+                String[] parts = entries.get(w).split("\\|\\|", 2);
+                if ("Location".equals(parts[0]) && parts.length > 1) GeolocationPermissions.getInstance().clear(parts[1]);
+                java.util.Set<String> set = new java.util.LinkedHashSet<>(prefs.getStringSet("site_permission_log", new java.util.LinkedHashSet<String>()));
+                set.remove(entries.get(w));
+                prefs.edit().putStringSet("site_permission_log", set).apply();
+                toast("Permission removed");
             })
-            .setPositiveButton("Clear all location grants", (d, w) -> {
-                GeolocationPermissions.getInstance().clearAll();
-                Set<String> updated = new LinkedHashSet<>(prefs.getStringSet("site_permission_log", new LinkedHashSet<>()));
-                Set<String> retained = new LinkedHashSet<>();
-                for (String entry : updated) if (!entry.startsWith("Location||")) retained.add(entry);
-                if (retained.isEmpty()) prefs.edit().remove("site_permission_log").apply();
-                else prefs.edit().putStringSet("site_permission_log", retained).apply();
-                Toast.makeText(this, "Website location grants cleared", Toast.LENGTH_SHORT).show();
-            })
-            .setNeutralButton("Android app permissions", (d, w) -> openAndroidPermissionSettings())
-            .setNegativeButton("Close", null)
-            .show();
+            .setNeutralButton("Android settings", (d, w) -> openAppSettings())
+            .setPositiveButton("Close", null).show();
     }
 
-    private void findInPage() {
-        EditText query = new EditText(this);
-        query.setSingleLine(true);
-        query.setHint("Text to find");
-        new AlertDialog.Builder(this).setTitle("Find in page").setView(query)
-            .setNegativeButton("Close", (d, w) -> current().clearMatches())
-            .setNeutralButton("Clear", (d, w) -> current().clearMatches())
-            .setPositiveButton("Find", (d, w) -> {
-                String value = query.getText().toString().trim();
-                if (!value.isEmpty()) current().findAllAsync(value);
-            }).show();
-    }
-
-    private void sharePage() {
-        if (HOME_PAGE.equals(current().getTag())) return;
-        String url = current().getUrl();
-        if (!isWebUrl(url)) return;
-        Intent share = new Intent(Intent.ACTION_SEND);
-        share.setType("text/plain");
-        share.putExtra(Intent.EXTRA_TEXT, url);
-        startActivity(Intent.createChooser(share, "Share page"));
-    }
-
-    private void showSavedList(String heading, String key) {
-        String raw = prefs.getString(key, "");
-        List<String> entries = new ArrayList<>();
-        for (String line : raw.split("\n")) if (!line.trim().isEmpty()) entries.add(line.trim());
-        if (entries.isEmpty()) {
-            new AlertDialog.Builder(this).setTitle(heading).setMessage("Nothing saved yet.")
-                .setPositiveButton("Close", null).show();
-            return;
-        }
-        String[] values = entries.toArray(new String[0]);
-        new AlertDialog.Builder(this).setTitle(heading).setItems(values, (d, which) -> {
-            String selected = values[which];
-            if ("bookmarks".equals(key)) {
-                String[] actions = {"Open", "Remove bookmark"};
-                new AlertDialog.Builder(this).setTitle(selected).setItems(actions, (dialog, action) -> {
-                    if (action == 0) current().loadUrl(selected);
-                    else {
-                        entries.remove(selected);
-                        StringBuilder updated = new StringBuilder();
-                        for (String item : entries) updated.append(item).append('\n');
-                        prefs.edit().putString("bookmarks", updated.toString()).apply();
-                        Toast.makeText(this, "Bookmark removed", Toast.LENGTH_SHORT).show();
-                    }
-                }).show();
-            } else {
-                current().loadUrl(selected);
-            }
-        }).setPositiveButton("Close", null).show();
-    }
-
-    @Override protected void onPause() {
-        updateHandler.removeCallbacks(periodicUpdateCheck);
-        saveSession();
-        for (WebView tab : tabs) tab.onPause();
-        super.onPause();
-    }
-
-    @Override protected void onResume() {
-        super.onResume();
-        long pendingUpdate = prefs.getLong("update_download_id", -1L);
-        if (pendingUpdate >= 0 && (Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls())) {
-            openDownloadedUpdate(pendingUpdate);
-        }
-        checkForUpdates(false);
-        updateHandler.removeCallbacks(periodicUpdateCheck);
-        updateHandler.postDelayed(periodicUpdateCheck, UPDATE_CHECK_INTERVAL);
-        for (int i = 0; i < tabs.size(); i++) {
-            if (i == active) tabs.get(i).onResume();
-            else tabs.get(i).onPause();
+    private void openAppSettings() {
+        try {
+            startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
+        } catch (Exception e) {
+            toast("Open ASTER in Android Settings");
         }
     }
 
-    @Override public void onBackPressed() {
-        if (current().canGoBack()) current().goBack();
-        else super.onBackPressed();
+    // ================================================================== activity results
+
+    @Override public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(code, permissions, results);
+        if (code == REQ_MEDIA_PERM) grantMedia();
+        else if (code == REQ_LOCATION_PERM) finishLocation(hasLocation());
+        else if (code == REQ_DOWNLOAD_PERM) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startDownload();
+            else { toast("Storage permission is required on this Android version"); dlUrl = null; }
+        }
     }
 
-    @Override protected void onDestroy() {
-        updateHandler.removeCallbacks(periodicUpdateCheck);
-        if (filePathCallback != null) { filePathCallback.onReceiveValue(null); filePathCallback = null; }
-        if (pendingMediaPermissionRequest != null) {
-            try { pendingMediaPermissionRequest.deny(); } catch (Exception ignored) {}
-            pendingMediaPermissionRequest = null;
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request == REQ_FILE) {
+            if (fileCallback != null) fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result, data));
+            fileCallback = null;
+        } else if (request == REQ_EXPORT && result == RESULT_OK && data != null && data.getData() != null) {
+            exportBackup(data.getData());
+        } else if (request == REQ_IMPORT && result == RESULT_OK && data != null && data.getData() != null) {
+            importBackup(data.getData());
+        } else if (request == REQ_VOICE && result == RESULT_OK && data != null) {
+            ArrayList<String> r = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+            if (r != null && !r.isEmpty()) navigate(r.get(0));
         }
-        if (pendingLocationCallback != null && pendingLocationOrigin != null) {
-            try { pendingLocationCallback.invoke(pendingLocationOrigin, false, false); } catch (Exception ignored) {}
-            pendingLocationCallback = null;
-            pendingLocationOrigin = null;
-        }
-        if (updateReceiverRegistered) {
-            try { unregisterReceiver(updateDownloadReceiver); } catch (Exception ignored) {}
-            updateReceiverRegistered = false;
-        }
-        saveSession();
-        for (WebView w : tabs) {
-            readerModeTabs.remove(w);
-            w.stopLoading();
-            topLevelHosts.remove(w);
-            pageBlockedCounts.remove(w);
-            w.destroy();
-        }
-        super.onDestroy();
     }
 }

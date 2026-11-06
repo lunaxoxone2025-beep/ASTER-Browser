@@ -1,78 +1,66 @@
 # ASTER Browser
 
-Current Android version: **0.15.1**.
+Current Android version: **1.0.0** — a full rebuild.
 
-ASTER is an Android-first browser prototype with a dark violet interface, tabbed browsing, bookmarks, history, downloads, and privacy controls. Its visual direction is original and takes broad inspiration from modern browsers such as Brave and Opera GX.
+ASTER is a privacy-first Android browser with a gaming-style interface. Version 1.0 combines the ideas people love in **Brave** (Shields, built-in blocking, privacy stats) and **Opera GX** (GX themes, Fast Action Button, GX Control, GX Corner) with its own identity.
 
-## Engine and platform
+> ASTER renders pages with **Android System WebView**. It is not a fork of Chromium, so it can't install browser extensions, and some browser-engine features (full uBlock Origin semantics, Tor, sync) are out of reach.
 
-ASTER currently uses Android System WebView. It is not a standalone Chromium browser engine, so some browser-level capabilities and extensions are outside its reach.
+## Highlights
 
-## ASTER Shield — ad and tracker blocking
+### ⛨ ASTER Shields (Brave-style)
+- Network blocking from **EasyList, EasyPrivacy, AdGuard Base / Tracking / Mobile and Peter Lowe's list**, refreshed every 24 h. Rules are stored in files, not in SharedPreferences.
+- **Cosmetic filtering**: generic and site-specific `##selector` rules hide ad slots, banners and empty ad containers.
+- **Standard / Aggressive** modes — standard leaves first-party requests alone, aggressive blocks them too.
+- **Per-site panel**: Shields up/down, block fingerprinting, hide ad elements, block scripts, list of blocked domains.
+- **Fingerprinting protection** (canvas/audio noise, generic hardware and WebGL values), Global Privacy Control and DNT signals.
+- **Pop-up blocking**, HTTPS-only navigation, third-party cookies blocked, invalid certificates never bypassed.
+- YouTube: ad UI hidden, skip buttons pressed and in-stream ads fast-forwarded when they slip through (best effort).
+- Start-page counters: **ads & trackers blocked, data saved, time saved**.
 
-- Uses a local cache of supported domain network rules imported from EasyList, EasyPrivacy, AdGuard Base, AdGuard Tracking Protection, AdGuard Mobile Ads, and Peter Lowe's ad-server list.
-- Includes built-in advertising and analytics domains.
-- Refreshes filter lists every 24 hours when a network connection is available; users can also request an update from the Shield panel.
-- Supports global protection and per-site exceptions.
-- Tracks blocked requests per page and per session.
+### ⚡ GX features (Opera GX-style)
+- **8 themes**: ASTER Night, Shields Dark, GX Classic, GX Purple Haze, GX Hackerman, GX Ultraviolet, GX Frutti di Mare, GX Ice Cold, Liquid Glass.
+- **Fast Action Button**: optional floating button that fans out into quick actions. Swipe it ← / → for back/forward, ↑ for tabs, long-press for a new tab.
+- **GX Control**: live RAM usage, **RAM limiter** (puts least-used tabs to sleep), **Hot Tabs Killer**, data saver (no images) and cache cleaner.
+- **GX Corner**: free-game giveaways on the start page (GamerPower API).
+- **GX sounds & haptics**: synthesized interface sounds and light vibration (both optional).
+- **Animated start-page wallpapers**: Nebula, Synthwave grid, Aurora, Code rain, Minimal.
 
-**Important limitation:** Android WebView does not expose the full network and cosmetic-filtering hooks of a dedicated browser engine. YouTube can serve in-stream ads from the same infrastructure as video, so ASTER cannot reliably block every video ad without risking playback. This is stronger than the previous host-only build, but it is not a full uBlock Origin or Brave Shields engine.
+### 🧭 Browsing
+- Up to 100 tabs with **tab sleeping**, visual **tab switcher** with thumbnails and swipe-to-close.
+- Address bar with **search suggestions**, history/bookmark matches and "paste and go"; can sit at the **top or bottom**.
+- **Full-screen video** (with auto-landscape), **long-press menus** for links and images, open links in new / background / private tabs.
+- `target=_blank` links and user-initiated pop-ups open as new tabs.
+- **Pull to refresh**, **find in page** bar, **reader mode** (dark or sepia), **night mode** for websites, **desktop site** per tab, **translate**, **add to home screen**, **voice search**.
+- Bookmarks, history (searchable, grouped by day) and downloads managers; editable **speed dial**.
+- Search engines: Brave Search (default for new installs), DuckDuckGo, Google, Bing, Startpage, Ecosia, Qwant.
+- **Background media playback** (optional).
+- Opens links, shared text and web searches from other apps; can be set as the default browser.
+- Keyboard shortcuts: Ctrl+L, Ctrl+T, Ctrl+W, Ctrl+R, Ctrl+F, Ctrl+D, Ctrl+Shift+N, Ctrl+Tab / Ctrl+Shift+Tab.
 
-## Start page and tabs
+### 👁 Private windows
+The full ASTER browser in a separate process with its own WebView profile (Android 9+). Nothing is written to history, sessions, bookmarks or speed dial; site data is wiped when the window closes and any leftover private profile is deleted on the next start. Settings changed inside a private window don't affect normal windows.
 
-- Customize the start page by showing or hiding ASTER branding, quick-access shortcuts, and bookmarks.
-- Choose one of four backgrounds: Violet, Midnight, Ocean, or Crimson.
-- View open tabs in a two-column card layout with page titles, domains, active-tab highlighting, close controls, and a quick new-tab action.
+### 💾 Backup & restore
+Exports bookmarks, history, speed dial, per-site Shields, settings and open tabs to a JSON file you control (format v2). Backups from 0.x (v1) can still be imported. Cookies and passwords are never included.
 
-## Cross-device usability and navigation
+### 🔄 Updates
+ASTER checks GitHub Releases and can download the new APK for Android's installer. Installing over an existing copy requires every release to be signed with the same permanent key.
 
-ASTER adapts its browser chrome to compact Android phones and expanded windows on tablets, foldables, and other resizable Android devices. It also supports:
-- Desktop-site mode.
-- Reader Mode for simplified article reading.
-- Page translation through Google Translate, with a selectable target language.
-- Adjustable webpage text size.
-- File uploads through Android's system file picker.
-- Opening HTTP/HTTPS links from other apps when ASTER is selected as the browser.
-- Hardware keyboard shortcuts: Ctrl+L (address bar), Ctrl+T (new tab), Ctrl+W (close tab), Ctrl+R (reload), Ctrl+Tab / Ctrl+Shift+Tab (cycle tabs), and Esc (exit Reader Mode).
-- Backup and restore for the new display preferences.
+## Project layout
 
-ASTER remains an Android application; responsive layouts do not make it a native iOS, Windows, or macOS browser. Desktop-site mode still uses Android System WebView. Translation requires an internet connection, and Reader Mode may not extract every complex page perfectly.
-
-## Backup and restore
-
-Use **Backup & restore** from the browser menu to export or import bookmarks, history, settings, and open tabs as JSON. Backups do not include cookies, passwords, cache, or WebView form data.
-
-## Updates
-
-ASTER checks GitHub Releases and can download an APK update for Android's package installer. Android requires user confirmation. Updating an installed copy also requires every release to use the same permanent signing key; until repository signing is configured, debug APKs are test builds and may not install over an existing copy.
+| File | Purpose |
+| --- | --- |
+| `MainActivity.java` | Browser UI, tabs, WebView clients, menus, settings, panels |
+| `PrivateActivity.java` | Private window (separate process + WebView profile) |
+| `ShieldEngine.java` | Filter-list download/parsing, network + cosmetic blocking, per-site settings, stats |
+| `StartPage.java` | New-tab page HTML, search engines, wallpapers, GX Corner |
+| `Scripts.java` | Injected JavaScript (cosmetic CSS, YouTube, fingerprinting, reader, night mode) |
+| `Store.java` | Bookmarks, history, speed dial, downloads and session (JSON files) |
+| `FabMenu.java` | GX Fast Action Button |
+| `AsterWebView.java`, `Tab.java` | WebView subclass (pull-to-refresh, scroll) and tab model |
+| `Theme.java`, `GxSounds.java`, `Updater.java` | Themes, interface sounds, GitHub updater |
 
 ## Build
 
-The Android project uses Gradle and Android Gradle Plugin. GitHub Actions builds the APK. See `.github/workflows/build-android.yml`.
-
-
-
-
-Release 0.15.0 delivers responsive Android layouts, Reader Mode, desktop-site mode, page translation, adjustable text size, system file uploads, external link handling, and keyboard navigation.
-
-
-Build verification trigger: automated Android APK build requested from the repository.
-
-## Interface themes
-
-- ASTER Night: original dark violet interface.
-- GX Neon: dark interface with neon red/pink accents, inspired by gaming browser aesthetics.
-- Liquid Glass: translucent glass-like panels, fine borders and a cool blue palette. The browser chrome uses a native translucent treatment; web start-page elements use CSS backdrop blur when supported by the installed Android WebView. Native blur intensity varies by Android version and device.
-
-## Private browsing
-
-The private window runs in a separate Android process and uses its own WebView data directory on Android 9 (API 28) and newer. Cookies are disabled, DOM storage and downloads are disabled, and its cache/history/form data are cleared when the window closes. Private windows do not write to ASTER's normal history or saved tab session. On Android versions older than 9, ASTER refuses to start private browsing rather than presenting a weaker mode as fully isolated.
-
-## Website permissions and transport security
-
-- Camera, microphone and location requests are shown to the user and require Android runtime permission where applicable.
-- Website permission management lists recent grants. Location grants can be cleared per origin; camera/microphone access can also be revoked from Android's app permission settings.
-- Non-HTTPS origins are not allowed to request camera, microphone or location.
-- TLS certificate errors are always cancelled. ASTER does not provide a bypass button for invalid certificates.
-
-These controls do not replace Android's system security model. Camera, microphone and location access also depend on the permissions granted to ASTER in Android Settings.
+Plain Java + Android framework, no third-party dependencies. GitHub Actions builds the APK (`.github/workflows/build-android.yml`); commits containing `[release]` publish a GitHub Release with `ASTER-Browser.apk`.

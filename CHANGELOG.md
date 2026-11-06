@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.0.0] - 2026-11-06
+Complete rebuild of ASTER as a modular browser inspired by Brave and Opera GX.
+
+### Added
+- ASTER Shields panel per site: Shields up/down, fingerprinting protection, cosmetic ad hiding, script blocking and blocked-domain list.
+- Cosmetic filtering from EasyList/AdGuard element-hiding rules (generic and site-specific).
+- Standard and Aggressive blocking modes; ads and trackers counted separately.
+- Start-page statistics: ads & trackers blocked, data saved, time saved.
+- Fingerprinting protection, Global Privacy Control / DNT signals, pop-up blocking.
+- GX themes (Classic, Purple Haze, Hackerman, Ultraviolet, Frutti di Mare, Ice Cold) plus Shields Dark.
+- Fast Action Button navigation with swipe gestures.
+- GX Control: RAM usage, RAM limiter with tab sleeping, Hot Tabs Killer, data saver, cache cleaner.
+- GX Corner free-games feed, animated start-page wallpapers, GX sounds and haptics.
+- Tab switcher with thumbnails and swipe-to-close; up to 100 tabs with lazy session restore.
+- Search suggestions, paste-and-go, address bar at top or bottom, seven search engines (Brave Search default for new installs).
+- Full-screen video, long-press link/image menu, background tabs, `target=_blank` and pop-ups as tabs.
+- Pull to refresh, find-in-page bar, new reader mode, night mode for websites, per-tab desktop mode, add to home screen, voice search.
+- Bookmark, history and download managers; editable speed dial.
+- Background media playback option, clear-site-data-on-exit option.
+- Private windows are now the full browser (own process and WebView profile) with leftover-profile cleanup.
+- Recovery when the WebView renderer crashes or is killed.
+- Accepts shared text and web-search intents from other apps.
+
+### Changed
+- Filter lists and browsing data moved from SharedPreferences to files.
+- Backup format v2 (bookmarks, history, speed dial, per-site Shields, settings, tabs); v1 backups still import.
+
+### Limitations
+- Rendering still uses Android System WebView; extensions, Tor and sync are not available.
+- Some YouTube in-stream ads served from video servers can't be blocked reliably.
+- Android doesn't allow apps to cap CPU/bandwidth, so GX Control manages memory and data instead.
+
 ## [0.15.1] - 2026-11-03
 ### Fixed
 - Forces a one-time download of the expanded ASTER Shield filter set after upgrading, even if the previous version refreshed its older lists less than 24 hours ago.

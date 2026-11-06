@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="aster_icon_background">#0F1117</color>
-    <color name="aster_browser_background">#101318</color>
+    <color name="aster_icon_background">#120D1C</color>
+    <color name="aster_browser_background">#0D0B12</color>
     <color name="aster_browser_surface">#1B2029</color>
-    <color name="aster_browser_accent">#72D9B3</color>
+    <color name="aster_browser_accent">#C270FF</color>
     <color name="aster_browser_text">#F1F4FA</color>
 </resources>
