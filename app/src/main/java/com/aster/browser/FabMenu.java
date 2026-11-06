@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * GX-style Fast Action Button: a floating button that fans out into quick actions.
+ * Orbit button: a floating button that fans out into quick actions.
  * Swipe the button left/right for back/forward and up for the tab switcher.
  */
 final class FabMenu extends FrameLayout {

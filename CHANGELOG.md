@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.3.0] - 2026-11-06
+Original identity and a new Liquid Glass.
+
+### Changed
+- ASTER now has its own names: privacy protection is **ASTER Halo**, the memory panel is **ASTER Core**, the start-page games feed is **Arcade**, the floating navigation is the **Orbit button**, and themes are **Nova, Nebula, Aurora, Comet, Solar Flare, Glacier and Ember** (existing theme choices migrate automatically).
+- Interface sounds and memory saver renamed accordingly.
+
+### Added
+- Rebuilt **Liquid Glass** theme and new **Liquid Glass Light**: floating translucent toolbar and bottom capsules with specular sheen and luminous rim over a colourful backdrop; menus, panels and pages sit on a blurred snapshot of the page behind them; start page uses real backdrop blur and saturation.
+- Light themes switch the status and navigation bar icons to dark.
+
 ## [1.2.0] - 2026-11-06
 Integrated, fluid interface.
 

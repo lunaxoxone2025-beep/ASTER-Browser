@@ -121,8 +121,8 @@ final class I18n {
         es("Settings", "Ajustes");
         es("Themes", "Temas");
         es("Theme", "Tema");
-        es("Shields", "Shields");
-        es("ASTER Shields", "ASTER Shields");
+        es("Halo", "Halo");
+        es("ASTER Halo", "ASTER Halo");
         es("Rewards", "Rewards");
         es("translucent", "translúcido");
         es("%s applied", "%s aplicado");
@@ -141,7 +141,7 @@ final class I18n {
         es("Translate", "Traducir");
         es("Night mode", "Modo noche");
         es("Add to Home", "A pantalla inicio");
-        es("GX Control", "GX Control");
+        es("ASTER Core", "ASTER Core");
         es("Previous match", "Coincidencia anterior");
         es("Next match", "Siguiente coincidencia");
         es("Close find", "Cerrar búsqueda");
@@ -179,7 +179,7 @@ final class I18n {
         es("Can't change saved data from a private window", "No se pueden cambiar datos guardados desde una ventana privada");
         es("Enter a valid web address", "Escribe una dirección web válida");
         es("Edit speed dial from a normal window", "Edita la marcación rápida desde una ventana normal");
-        es("Refreshing GX Corner…", "Actualizando GX Corner…");
+        es("Refreshing Arcade…", "Actualizando Arcade…");
         es("Voice search isn't available on this device", "La búsqueda por voz no está disponible en este dispositivo");
         es("Use a normal window for backups", "Usa una ventana normal para las copias de seguridad");
         es("No file picker available", "No hay selector de archivos disponible");
@@ -226,7 +226,7 @@ final class I18n {
         es("Start page wallpaper", "Fondo de la página de inicio");
         es("Navigation style", "Estilo de navegación");
         es("Bottom toolbar", "Barra inferior");
-        es("Fast Action Button (GX)", "Fast Action Button (GX)");
+        es("Orbit button", "Botón Órbita");
         es("Address bar position", "Posición de la barra de direcciones");
         es("Top", "Arriba");
         es("Bottom", "Abajo");
@@ -237,15 +237,15 @@ final class I18n {
         es("Dark", "Oscuro");
         es("Light (sepia)", "Claro (sepia)");
         es("Customize start page", "Personalizar página de inicio");
-        es("Shields statistics", "Estadísticas de Shields");
+        es("Halo statistics", "Estadísticas de Halo");
         es("Clock & date", "Reloj y fecha");
         es("Speed dial", "Marcación rápida");
-        es("GX Corner (free games)", "GX Corner (juegos gratis)");
+        es("Arcade (free games)", "Arcade (juegos gratis)");
         es("Wallpaper…", "Fondo…");
-        es("Per-site Shields", "Shields por sitio");
-        es("No sites have custom Shields settings yet.", "Ningún sitio tiene ajustes de Shields personalizados todavía.");
-        es("Reset this site to the global Shields settings?", "¿Restablecer este sitio a los ajustes globales de Shields?");
-        es("Shields down", "Shields desactivados");
+        es("Per-site Halo", "Halo por sitio");
+        es("No sites have custom Halo settings yet.", "Ningún sitio tiene ajustes de Halo personalizados todavía.");
+        es("Reset this site to the global Halo settings?", "¿Restablecer este sitio a los ajustes globales de Halo?");
+        es("Halo off", "Halo desactivado");
         es("scripts blocked", "scripts bloqueados");
         es("Clear browsing data", "Borrar datos de navegación");
         es("Browsing history", "Historial de navegación");
@@ -262,8 +262,8 @@ final class I18n {
         es("Add to speed dial", "Añadir a marcación rápida");
         es("Edit shortcut", "Editar acceso");
         es("Backup & restore", "Copia de seguridad");
-        es("Export bookmarks, history, speed dial, Shields settings, preferences and open tabs to a JSON file you control. Cookies and passwords are never included.",
-            "Exporta marcadores, historial, marcación rápida, ajustes de Shields, preferencias y pestañas abiertas a un archivo JSON que tú controlas. Nunca incluye cookies ni contraseñas.");
+        es("Export bookmarks, history, speed dial, Halo settings, preferences and open tabs to a JSON file you control. Cookies and passwords are never included.",
+            "Exporta marcadores, historial, marcación rápida, ajustes de Halo, preferencias y pestañas abiertas a un archivo JSON que tú controlas. Nunca incluye cookies ni contraseñas.");
         es("Restore backup?", "¿Restaurar la copia de seguridad?");
         es("This replaces your bookmarks, history, speed dial and settings with the backup's contents.",
             "Esto reemplaza tus marcadores, historial, marcación rápida y ajustes por el contenido de la copia.");
@@ -299,11 +299,11 @@ final class I18n {
         es("File", "Archivo");
 
         // ---- shields panel
-        es("⛨  ASTER SHIELDS", "⛨  ASTER SHIELDS");
+        es("⛨  ASTER HALO", "⛨  ASTER HALO");
         es("New tab", "Nueva pestaña");
-        es("Shields are off everywhere", "Shields desactivados en todas partes");
-        es("Shields are UP for this site", "Shields ACTIVADOS en este sitio");
-        es("Shields are DOWN for this site", "Shields DESACTIVADOS en este sitio");
+        es("Halo is off everywhere", "Halo desactivado en todas partes");
+        es("Halo is ON for this site", "Halo ACTIVADO en este sitio");
+        es("Halo is OFF for this site", "Halo DESACTIVADO en este sitio");
         es("Blocked all time", "Bloqueado en total");
         es("Data saved", "Datos ahorrados");
         es("Time saved", "Tiempo ahorrado");
@@ -328,20 +328,20 @@ final class I18n {
         es("Update filter lists", "Actualizar listas de filtros");
         es("%s network rules · %s cosmetic · updated %s", "%s reglas de red · %s cosméticas · actualizado %s");
         es("never", "nunca");
-        es("Turn Shields off everywhere", "Desactivar Shields en todas partes");
-        es("Turn Shields on everywhere", "Activar Shields en todas partes");
+        es("Turn Halo off everywhere", "Desactivar Halo en todas partes");
+        es("Turn Halo on everywhere", "Activar Halo en todas partes");
         es("ASTER runs on Android System WebView. Network and cosmetic rules block most ads and trackers, but video ads served from the same servers as the video (e.g. some YouTube ads) can't always be removed.",
             "ASTER funciona con Android System WebView. Las reglas de red y cosméticas bloquean la mayoría de anuncios y rastreadores, pero los anuncios de vídeo servidos desde los mismos servidores que el vídeo (como algunos de YouTube) no siempre se pueden quitar.");
 
-        // ---- GX control
-        es("⚡  GX CONTROL", "⚡  GX CONTROL");
+        // ---- ASTER Core
+        es("⚡  ASTER CORE", "⚡  ASTER CORE");
         es("RAM", "RAM");
         es("ASTER: %d MB", "ASTER: %d MB");
         es("Device: %d MB used of %d MB · %d of %d tabs active", "Dispositivo: %d MB usados de %d MB · %d de %d pestañas activas");
-        es("RAM limiter", "Limitador de RAM");
+        es("Memory saver", "Ahorro de memoria");
         es("Puts the least-used tabs to sleep to free memory", "Duerme las pestañas menos usadas para liberar memoria");
         es("Max active tabs: %d", "Máximo de pestañas activas: %d");
-        es("Hot tabs killer", "Hot Tabs Killer");
+        es("Open tabs", "Pestañas abiertas");
         es("Active", "Activa");
         es("Sleeping 💤", "Dormida 💤");
         es("Running in background", "En segundo plano");
@@ -352,10 +352,22 @@ final class I18n {
         es("Don't load images — faster pages on slow or metered networks", "No carga imágenes: páginas más rápidas en redes lentas o con datos limitados");
         es("Clear web cache", "Borrar caché web");
         es("Free storage used by cached pages", "Libera el espacio usado por páginas en caché");
-        es("Android doesn't let apps cap CPU or bandwidth, so GX Control manages memory by sleeping tabs and saves data by skipping images. WebView renderer memory is reported separately by Android.",
-            "Android no deja a las apps limitar CPU ni ancho de banda, así que GX Control gestiona la memoria durmiendo pestañas y ahorra datos sin cargar imágenes. La memoria del motor WebView la mide Android por separado.");
+        es("Android doesn't let apps cap CPU or bandwidth, so ASTER Core manages memory by sleeping tabs and saves data by skipping images. WebView renderer memory is reported separately by Android.",
+            "Android no deja a las apps limitar CPU ni ancho de banda, así que ASTER Core gestiona la memoria durmiendo pestañas y ahorra datos sin cargar imágenes. La memoria del motor WebView la mide Android por separado.");
 
         // ---- themes
+        es("Dark · violet", "Oscuro · violeta");
+        es("Glass · dark", "Cristal · oscuro");
+        es("Glass · light", "Cristal · claro");
+        es("Dark · crimson", "Oscuro · carmesí");
+        es("Dark · purple", "Oscuro · morado");
+        es("Dark · green", "Oscuro · verde");
+        es("Dark · indigo", "Oscuro · índigo");
+        es("Dark · amber", "Oscuro · ámbar");
+        es("Dark · cyan", "Oscuro · cian");
+        es("Graphite · orange", "Grafito · naranja");
+        es("ASTER Core", "ASTER Core");
+        es("Arcade", "Arcade");
         es("🎨  THEMES", "🎨  TEMAS");
         es("Start page", "Página de inicio");
         es("Wallpaper", "Fondo");
@@ -367,23 +379,23 @@ final class I18n {
 
         // ---- settings
         es("Appearance", "Apariencia");
-        es("Wallpaper, stats, clock, speed dial, GX Corner", "Fondo, estadísticas, reloj, marcación rápida, GX Corner");
+        es("Wallpaper, stats, clock, speed dial, Arcade", "Fondo, estadísticas, reloj, marcación rápida, Arcade");
         es("Night mode for websites", "Modo noche para webs");
         es("Darkens light web pages", "Oscurece las páginas claras");
-        es("GX sounds", "Sonidos GX");
+        es("Interface sounds", "Sonidos de interfaz");
         es("Interface sound effects", "Efectos de sonido de la interfaz");
         es("Haptic feedback", "Vibración al tocar");
         es("Vibrate lightly on taps", "Vibra suavemente al tocar");
         es("Search suggestions", "Sugerencias de búsqueda");
         es("Ask your search engine for suggestions while typing", "Pide sugerencias a tu buscador mientras escribes");
-        es("Shields & privacy", "Shields y privacidad");
+        es("Halo & privacy", "Halo y privacidad");
         es("Block ads and trackers on all sites", "Bloquea anuncios y rastreadores en todos los sitios");
         es("Cosmetic filtering from EasyList & AdGuard", "Filtrado cosmético de EasyList y AdGuard");
         es("Randomize canvas, audio and hardware signals", "Aleatoriza canvas, audio y señales del hardware");
         es("%s network rules", "%s reglas de red");
         es("%d customized sites", "%d sitios personalizados");
         es("Camera, microphone and location", "Cámara, micrófono y ubicación");
-        es("Reset Shields statistics", "Restablecer estadísticas de Shields");
+        es("Reset Halo statistics", "Restablecer estadísticas de Halo");
         es("%s blocked so far", "%s bloqueados hasta ahora");
         es("History, cookies, site data and cache", "Historial, cookies, datos de sitios y caché");
         es("Clear site data on exit", "Borrar datos de sitios al salir");
@@ -431,8 +443,8 @@ final class I18n {
 
         // ---- start page
         es("You are in a private window.", "Estás en una ventana privada.");
-        es("ASTER won't save your history, session or site data from this window. Cookies and storage live in a separate, isolated profile and are wiped when you close it. Shields still block ads and trackers.",
-            "ASTER no guardará el historial, la sesión ni los datos de sitios de esta ventana. Las cookies y el almacenamiento están en un perfil aislado que se borra al cerrarla. Shields sigue bloqueando anuncios y rastreadores.");
+        es("ASTER won't save your history, session or site data from this window. Cookies and storage live in a separate, isolated profile and are wiped when you close it. Halo still blocks ads and trackers.",
+            "ASTER no guardará el historial, la sesión ni los datos de sitios de esta ventana. Las cookies y el almacenamiento están en un perfil aislado que se borra al cerrarla. Halo sigue bloqueando anuncios y rastreadores.");
         es("Your internet provider, employer or the sites you visit can still see your activity.", "Tu proveedor de internet, tu empresa o los sitios que visitas aún pueden ver tu actividad.");
         es("EDIT", "EDITAR");
         es("ALL", "TODO");

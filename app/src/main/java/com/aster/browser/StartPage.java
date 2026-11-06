@@ -8,7 +8,7 @@ import org.json.JSONObject;
 import java.net.URLEncoder;
 import java.util.Locale;
 
-/** Builds the HTML for ASTER's new-tab page: shield stats, clock, search, speed dial and GX Corner. */
+/** Builds the HTML for ASTER's new-tab page: shield stats, clock, search, speed dial and Arcade. */
 final class StartPage {
     static final String BASE_URL = "https://aster.start/";
 
@@ -84,7 +84,7 @@ final class StartPage {
 
     static String build(Theme t, SharedPreferences prefs, Store store, ShieldEngine shields, boolean incognito, String gxCornerJson) {
         String engine = prefs.getString("search_engine", "brave");
-        String wallpaper = prefs.getString("home_wallpaper", t.isGx() ? "synthwave" : "nebula");
+        String wallpaper = prefs.getString("home_wallpaper", t.defaultWallpaper());
         String accent = Theme.css(t.accent);
         String accent2 = Theme.css(t.accent2);
         String bg = Theme.css(t.bg);
@@ -95,7 +95,7 @@ final class StartPage {
 
         StringBuilder h = new StringBuilder(16000);
         h.append("<!doctype html><html lang='").append(I18n.es ? "es" : "en").append("'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover'>")
-            .append("<meta name='color-scheme' content='dark'><title>").append(I18n.t(incognito ? "Private tab" : "New tab")).append("</title><style>")
+            .append("<meta name='color-scheme' content='").append(t.light ? "light" : "dark").append("'><title>").append(I18n.t(incognito ? "Private tab" : "New tab")).append("</title><style>")
             .append(":root{--a:").append(accent).append(";--a2:").append(accent2).append(";--bg:").append(bg)
             .append(";--s:").append(surface).append(";--b:").append(border).append(";--t:").append(text).append(";--m:").append(muted).append("}")
             .append("*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--t);font-family:system-ui,-apple-system,Roboto,Arial,sans-serif}")
@@ -118,20 +118,21 @@ final class StartPage {
             .append(".tile:active .ic{transform:scale(.9)}.ic img{width:30px;height:30px;border-radius:7px;position:absolute}.lbl{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}")
             .append(".add .ic{border-style:dashed;color:var(--m);font-weight:300;font-size:28px}")
             .append(".list a{display:flex;gap:10px;align-items:center;padding:11px 13px;margin-bottom:7px;border-radius:13px;background:var(--s);border:1px solid var(--b);color:var(--t);text-decoration:none;font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}")
-            .append(".gx{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}.gx::-webkit-scrollbar{display:none}")
+            .append(".arcade{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}.arcade::-webkit-scrollbar{display:none}")
             .append(".game{flex:0 0 210px;scroll-snap-align:start;border-radius:16px;overflow:hidden;background:var(--s);border:1px solid var(--b);color:var(--t);text-decoration:none}")
             .append(".game img{width:100%;height:105px;object-fit:cover;display:block;background:#0004}.game div{padding:9px 11px}.game b{display:block;font-size:12.5px;line-height:1.3;max-height:33px;overflow:hidden}.game span{display:block;margin-top:4px;font-size:10.5px;color:var(--a);font-weight:700}")
             .append(".empty{color:var(--m);font-size:12px;padding:6px 2px}")
             .append(".foot{margin-top:auto;padding-top:36px;display:flex;justify-content:center;gap:10px}.foot a{color:var(--m);text-decoration:none;font-size:11px;letter-spacing:1px;padding:8px 14px;border:1px solid var(--b);border-radius:20px;background:var(--s)}")
             .append(".priv{margin:26px auto 0;max-width:620px;padding:16px 18px;border-radius:18px;background:var(--s);border:1px solid var(--b);font-size:13px;line-height:1.55;color:var(--m)}.priv b{color:var(--t)}")
             .append(wallpaperCss(wallpaper, t))
+            .append(t.glass ? glassCss(t) : "")
             .append("</style></head><body><div id='bg'>").append(wallpaperHtml(wallpaper)).append("</div><main class='page'>");
 
         if (incognito) {
             h.append("<div class='brand'><div class='logo'>&#128065;</div><div class='n'>PRIVATE</div></div>");
             h.append(searchForm(engine, I18n.t("Search privately")));
             h.append("<div class='priv'><b>").append(esc(I18n.t("You are in a private window."))).append("</b><br>")
-                .append(esc(I18n.t("ASTER won't save your history, session or site data from this window. Cookies and storage live in a separate, isolated profile and are wiped when you close it. Shields still block ads and trackers.")))
+                .append(esc(I18n.t("ASTER won't save your history, session or site data from this window. Cookies and storage live in a separate, isolated profile and are wiped when you close it. Halo still blocks ads and trackers.")))
                 .append("<br><br>").append(esc(I18n.t("Your internet provider, employer or the sites you visit can still see your activity."))).append("</div>");
         } else {
             if (prefs.getBoolean("home_show_stats", true)) {
@@ -174,10 +175,10 @@ final class StartPage {
             }
 
             if (prefs.getBoolean("home_show_gx_corner", true)) {
-                h.append("<h3><span>GX Corner &middot; ").append(esc(I18n.t("Free games"))).append("</span><a href='aster://gxcorner/refresh'>").append(esc(I18n.t("REFRESH"))).append("</a></h3>");
+                h.append("<h3><span>Arcade &middot; ").append(esc(I18n.t("Free games"))).append("</span><a href='aster://gxcorner/refresh'>").append(esc(I18n.t("REFRESH"))).append("</a></h3>");
                 h.append(gxCorner(gxCornerJson));
             }
-            h.append("<div class='foot'><a href='aster://customize'>&#9881; ").append(esc(I18n.t("CUSTOMIZE"))).append("</a><a href='aster://shields'>&#9960; SHIELDS</a></div>");
+            h.append("<div class='foot'><a href='aster://customize'>&#9881; ").append(esc(I18n.t("CUSTOMIZE"))).append("</a><a href='aster://shields'>&#9960; HALO</a></div>");
         }
 
         h.append("</main><script>")
@@ -195,6 +196,25 @@ final class StartPage {
         return h.toString();
     }
 
+    /** Liquid Glass surfaces: real backdrop blur, saturation boost, specular rim and top sheen. */
+    private static String glassCss(Theme t) {
+        String body = t.light ? "linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.46))"
+            : "linear-gradient(180deg,rgba(255,255,255,.20),rgba(255,255,255,.06))";
+        String rim = t.light ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.34)";
+        String shadow = t.light ? "0 10px 30px rgba(40,60,110,.16)" : "0 14px 34px rgba(0,0,0,.35)";
+        String sel = ".stat,form,.ic,.list a,.game,.foot a,.priv";
+        return sel + "{background:" + body + "!important;border:1px solid " + rim + "!important;"
+            + "backdrop-filter:blur(26px) saturate(190%);-webkit-backdrop-filter:blur(26px) saturate(190%);"
+            + "box-shadow:inset 0 1px 0 rgba(255,255,255," + (t.light ? ".95" : ".45") + "),inset 0 -1px 0 rgba(255,255,255,.10)," + shadow + "!important}"
+            + "form{border-radius:26px!important}.ic{border-radius:20px!important}.stat{border-radius:20px!important}"
+            + ".ib{box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 6px 18px " + Theme.cssA(t.accent, 0.35f) + "}"
+            + ".clock{text-shadow:0 2px 24px " + (t.light ? "rgba(255,255,255,.9)" : "rgba(0,0,0,.35)") + "}"
+            + "#bg{background:" + (t.light
+                ? "linear-gradient(135deg,#d6e4ff,#f0e6ff 50%,#d6f5ee)"
+                : "linear-gradient(135deg,#081636,#1a0a34 50%,#04242c)") + "}"
+            + ".blob{opacity:" + (t.light ? ".55" : ".6") + "!important;filter:blur(50px)!important}";
+    }
+
     private static String searchForm(String engine, String placeholder) {
         return "<form onsubmit='return go(event)'><input id='q' type='search' autocomplete='off' autocapitalize='off' placeholder='"
             + esc(placeholder) + "' aria-label='Search'>"
@@ -204,7 +224,7 @@ final class StartPage {
 
     private static String gxCorner(String json) {
         if (json == null || json.isEmpty()) return "<div class='empty'>" + esc(I18n.t("Loading free games from GamerPower… tap Refresh if nothing appears.")) + "</div>";
-        StringBuilder h = new StringBuilder("<div class='gx'>");
+        StringBuilder h = new StringBuilder("<div class='arcade'>");
         int count = 0;
         try {
             JSONArray a = new JSONArray(json);
@@ -278,7 +298,7 @@ final class StartPage {
         if ("matrix".equals(w)) {
             return "(function(){var c=document.getElementById('fx');if(!c)return;var x=c.getContext('2d'),W,H,cols,drops,fs=14;"
                 + "function r(){W=c.width=innerWidth;H=c.height=innerHeight;cols=Math.floor(W/fs);drops=[];for(var i=0;i<cols;i++)drops.push(Math.random()*H/fs);}r();addEventListener('resize',r);"
-                + "var col=" + Scripts.quote(accent) + ",ch='01ASTERGX<>/{}#$%';"
+                + "var col=" + Scripts.quote(accent) + ",ch='01ASTER<>/{}#$%';"
                 + "setInterval(function(){if(document.hidden)return;x.fillStyle='rgba(0,0,0,.08)';x.fillRect(0,0,W,H);x.fillStyle=col;x.globalAlpha=.55;x.font=fs+'px monospace';"
                 + "for(var i=0;i<cols;i++){x.fillText(ch[Math.floor(Math.random()*ch.length)],i*fs,drops[i]*fs);if(drops[i]*fs>H&&Math.random()>.975)drops[i]=0;drops[i]++;}x.globalAlpha=1;},60);})();";
         }

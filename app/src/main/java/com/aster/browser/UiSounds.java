@@ -5,13 +5,13 @@ import android.media.AudioFormat;
 import android.media.AudioTrack;
 
 /** Tiny synthesized interface sounds (no audio assets needed). */
-final class GxSounds {
+final class UiSounds {
     private static final int RATE = 44100;
     private AudioTrack click;
     private AudioTrack open;
     private AudioTrack close;
 
-    GxSounds() {
+    UiSounds() {
         click = build(synth(1900, 1100, 0.028, 0.22, false));
         open = build(synth(520, 1450, 0.10, 0.20, true));
         close = build(synth(1300, 420, 0.09, 0.18, true));

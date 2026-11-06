@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** One browser tab. When the GX RAM limiter puts a tab to sleep its WebView is destroyed and only the URL is kept. */
+/** One browser tab. When the memory saver puts a tab to sleep its WebView is destroyed and only the URL is kept. */
 final class Tab {
     private static final AtomicInteger NEXT_ID = new AtomicInteger(1);
 

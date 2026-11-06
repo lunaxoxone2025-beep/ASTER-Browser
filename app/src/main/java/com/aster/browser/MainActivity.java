@@ -103,7 +103,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * ASTER Browser 1.0 — a privacy-first, GX-styled Android browser built on Android System WebView.
+ * ASTER Browser — an original, privacy-first Android browser built on Android System WebView.
  */
 public class MainActivity extends Activity implements AsterWebView.Listener {
     static final String START = StartPage.BASE_URL;
@@ -126,7 +126,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     Store store;
     ShieldEngine shields;
     private Updater updater;
-    private GxSounds sounds;
+    private UiSounds sounds;
     boolean incognito;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final List<Tab> tabs = new ArrayList<>();
@@ -194,9 +194,10 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         }
         migratePrefs();
         theme = Theme.byId(prefs.getString("ui_theme", "aster"));
+        if (incognito && theme.light) theme = Theme.byId("liquid");
         store = new Store(this, incognito);
         shields = new ShieldEngine(this, prefs);
-        if (prefs.getBoolean("gx_sounds", true)) sounds = new GxSounds();
+        if (prefs.getBoolean("gx_sounds", true)) sounds = new UiSounds();
         buildUi();
 
         String incoming = incomingUrl(getIntent());
@@ -500,26 +501,36 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
     Sheet sheet(View body) { return new Sheet(body); }
 
-    /** Bottom panel with drag-to-dismiss, inspired by the integrated menus of Brave and Opera GX. */
+    /** Blurred snapshot of the browser as it is right now (used behind glass panels). */
+    private void frost(Glass.BitmapCallback cb) {
+        Glass.capture(this, rootFrame, cb);
+    }
+
+    /** Bottom panel with drag-to-dismiss, drawn inside the browser window. */
     final class Sheet implements Overlay {
-        final View scrim;
+        final ImageView scrim;
         final DragPanel panel;
         private boolean closing;
 
         Sheet(View body) {
-            scrim = new View(MainActivity.this);
-            scrim.setBackgroundColor(Color.argb(150, 0, 0, 0));
+            scrim = new ImageView(MainActivity.this);
+            scrim.setScaleType(ImageView.ScaleType.FIT_XY);
+            scrim.setBackgroundColor(theme.glass ? Color.argb(theme.light ? 40 : 70, 0, 0, 0) : Color.argb(150, 0, 0, 0));
             scrim.setClickable(true);
             scrim.setOnClickListener(v -> dismiss());
             panel = new DragPanel(this);
             panel.setOrientation(LinearLayout.VERTICAL);
-            GradientDrawable bg = new GradientDrawable();
-            bg.setColor(theme.glass ? Color.rgb(18, 26, 44) : Theme.blend(theme.bg, theme.surface, 0.35f));
-            float r = dp(26);
-            bg.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
-            bg.setStroke(dp(1), Theme.withAlpha(theme.accent, 80));
-            panel.setBackground(bg);
-            panel.setElevation(dp(24));
+            if (theme.glass) {
+                panel.setBackground(Glass.material(theme, Glass.topRadii(dp(30)), getResources().getDisplayMetrics().density, theme.light ? 175 : 150));
+            } else {
+                GradientDrawable bg = new GradientDrawable();
+                bg.setColor(Theme.blend(theme.bg, theme.surface, 0.35f));
+                float r = dp(26);
+                bg.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
+                bg.setStroke(dp(1), Theme.withAlpha(theme.accent, 80));
+                panel.setBackground(bg);
+                panel.setElevation(dp(24));
+            }
             panel.setClickable(true);
             View handle = new View(MainActivity.this);
             handle.setBackground(shape(Theme.withAlpha(theme.muted, 150), 3, 0));
@@ -537,6 +548,11 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
         void show() {
             hideKeyboard();
+            if (theme.glass) frost(bitmap -> {
+                if (bitmap == null) return;
+                scrim.setImageBitmap(bitmap);
+                scrim.setColorFilter(theme.light ? Color.argb(70, 255, 255, 255) : Color.argb(60, 0, 0, 0), android.graphics.PorterDuff.Mode.SRC_ATOP);
+            });
             overlayLayer.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
             int avail = overlayLayer.getWidth() > 0 ? overlayLayer.getWidth() : getResources().getDisplayMetrics().widthPixels;
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Math.min(avail, dp(620)), -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
@@ -645,7 +661,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             this.fromBottom = fromBottom;
             root = new LinearLayout(MainActivity.this);
             root.setOrientation(LinearLayout.VERTICAL);
-            root.setBackgroundColor(theme.bg);
+            root.setBackgroundColor(theme.glass ? Theme.withAlpha(theme.bg, 235) : theme.bg);
             root.setClickable(true);
             root.setElevation(dp(16));
             header = new LinearLayout(MainActivity.this);
@@ -685,6 +701,13 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
         void show() {
             hideKeyboard();
+            if (theme.glass) frost(bitmap -> {
+                if (bitmap == null) return;
+                android.graphics.drawable.BitmapDrawable frosted = new android.graphics.drawable.BitmapDrawable(getResources(), bitmap);
+                frosted.setFilterBitmap(true);
+                int tint = theme.light ? Color.argb(120, 245, 248, 255) : Color.argb(120, 8, 12, 26);
+                root.setBackground(new android.graphics.drawable.LayerDrawable(new Drawable[]{frosted, new ColorDrawable(tint)}));
+            });
             overlayLayer.addView(root, new FrameLayout.LayoutParams(-1, -1));
             overlays.add(this);
             root.setAlpha(0f);
@@ -812,7 +835,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         toolbar.addView(homeTop, hp);
 
         FrameLayout shieldFrame = new FrameLayout(this);
-        shieldIcon = chromeButton("⛨", 19, "ASTER Shields");
+        shieldIcon = chromeButton("⛨", 19, "ASTER Halo");
         shieldFrame.addView(shieldIcon, new FrameLayout.LayoutParams(-1, -1));
         shieldBadge = bold("", 9, Color.WHITE);
         shieldBadge.setGravity(Gravity.CENTER);
@@ -886,7 +909,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         onTap(menuTop, this::showMenu);
         toolbar.addView(menuTop, new LinearLayout.LayoutParams(dp(40), dp(44)));
 
-        // Swipe left/right on the address bar to switch tabs (like Chrome and Opera).
+        // Swipe left/right on the address bar to switch tabs.
         final GestureDetector swipe = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
                 if (e1 == null || e2 == null || address.hasFocus() || tabs.size() < 2) return false;
@@ -1086,17 +1109,24 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         bottomBarHidden = false;
         bottomBar.setTranslationY(0);
         bottomBar.setVisibility(View.VISIBLE);
+        LinearLayout.LayoutParams toolLp = new LinearLayout.LayoutParams(-1, -2);
+        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(-1, -2);
+        if (theme.glass) {
+            toolLp.setMargins(dp(10), dp(bottom ? 4 : 6), dp(10), dp(bottom ? 10 : 4));
+            barLp.setMargins(dp(16), dp(4), dp(16), dp(10));
+            toolbar.setPadding(dp(8), dp(4), dp(8), dp(4));
+        }
         if (!bottom) {
-            content.addView(toolbar, new LinearLayout.LayoutParams(-1, -2));
+            content.addView(toolbar, toolLp);
             if (wide) content.addView(tabStripScroll, new LinearLayout.LayoutParams(-1, -2));
             content.addView(progress, new LinearLayout.LayoutParams(-1, dp(2)));
             content.addView(webArea, new LinearLayout.LayoutParams(-1, 0, 1));
         } else {
             content.addView(webArea, new LinearLayout.LayoutParams(-1, 0, 1));
             content.addView(progress, new LinearLayout.LayoutParams(-1, dp(2)));
-            content.addView(toolbar, new LinearLayout.LayoutParams(-1, -2));
+            content.addView(toolbar, toolLp);
         }
-        if (!fabOn && !wide) content.addView(bottomBar, new LinearLayout.LayoutParams(-1, -2));
+        if (!fabOn && !wide) content.addView(bottomBar, barLp);
         if (wide) rebuildTabStrip();
         fab.setVisibility(fabOn ? View.VISIBLE : View.GONE);
         FrameLayout.LayoutParams sl = (FrameLayout.LayoutParams) suggestScroll.getLayoutParams();
@@ -1111,8 +1141,8 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         items.add(new FabMenu.Item("+", I18n.t("New tab"), () -> openInNewTab(null, false)));
         items.add(new FabMenu.Item("🔍", I18n.t("Search"), () -> { address.requestFocus(); showKeyboard(address); }));
         items.add(new FabMenu.Item("▦", I18n.t("Tabs"), this::showTabs));
-        items.add(new FabMenu.Item("⛨", I18n.t("Shields"), this::showShields));
-        items.add(new FabMenu.Item("⚡", I18n.t("GX Control"), this::showGxControl));
+        items.add(new FabMenu.Item("⛨", I18n.t("Halo"), this::showShields));
+        items.add(new FabMenu.Item("⚡", I18n.t("ASTER Core"), this::showGxControl));
         items.add(new FabMenu.Item("☰", I18n.t("Menu"), this::showMenu));
         fab.setup(theme, items, new FabMenu.Gestures() {
             @Override public void swipeLeft() { goBack(); }
@@ -1124,16 +1154,30 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     }
 
     private void applyTheme() {
-        getWindow().setStatusBarColor(theme.bg);
-        getWindow().setNavigationBarColor(theme.bg);
-        content.setBackgroundColor(theme.bg);
-        rootFrame.setBackgroundColor(theme.bg);
-        int barBg = incognito ? Color.rgb(24, 14, 40) : (theme.glass ? Color.rgb(16, 24, 40) : theme.bg);
-        toolbar.setBackgroundColor(barBg);
-        bottomBar.setBackgroundColor(barBg);
+        getWindow().setStatusBarColor(theme.glass ? (theme.light ? Color.rgb(214, 228, 255) : Color.rgb(8, 22, 54)) : theme.bg);
+        getWindow().setNavigationBarColor(theme.glass ? (theme.light ? Color.rgb(214, 245, 238) : Color.rgb(4, 36, 44)) : theme.bg);
+        applySystemBarAppearance(theme.light);
+        int barBg;
+        if (theme.glass) {
+            // Liquid Glass: colourful backdrop with floating translucent capsules on top.
+            rootFrame.setBackground(Glass.backdrop(theme, getResources().getDisplayMetrics().widthPixels));
+            content.setBackgroundColor(Color.TRANSPARENT);
+            float density = getResources().getDisplayMetrics().density;
+            toolbar.setBackground(Glass.material(theme, Glass.radii(dp(26)), density, theme.light ? 150 : 120));
+            bottomBar.setBackground(Glass.material(theme, Glass.radii(dp(28)), density, theme.light ? 150 : 120));
+            address.setBackground(shape(theme.light ? Color.argb(150, 255, 255, 255) : Color.argb(36, 255, 255, 255), 20,
+                theme.light ? Color.argb(200, 255, 255, 255) : Color.argb(70, 255, 255, 255)));
+            barBg = Color.TRANSPARENT;
+        } else {
+            content.setBackgroundColor(theme.bg);
+            rootFrame.setBackgroundColor(theme.bg);
+            barBg = incognito ? Color.rgb(24, 14, 40) : theme.bg;
+            toolbar.setBackgroundColor(barBg);
+            bottomBar.setBackgroundColor(barBg);
+            address.setBackground(shape(incognito ? Color.rgb(44, 26, 70) : theme.surface, 22, Theme.withAlpha(theme.accent, 45)));
+        }
         address.setTextColor(theme.text);
         address.setHintTextColor(theme.muted);
-        address.setBackground(shape(incognito ? Color.rgb(44, 26, 70) : theme.surface, 22, Theme.withAlpha(theme.accent, 45)));
         TextView[] icons = {shieldIcon, reloadBtn, backBtn, forwardBtn, menuBtn, backTop, forwardTop, homeTop, newTabTop, menuTop};
         for (TextView t : icons) {
             t.setTextColor(theme.text);
@@ -1154,8 +1198,8 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         shieldBadge.setBackground(shape(theme.accent, 8, 0));
         progress.setProgressTintList(ColorStateList.valueOf(theme.accent));
         progress.setProgressBackgroundTintList(ColorStateList.valueOf(barBg));
-        suggestScroll.setBackground(shape(theme.glass ? Color.rgb(18, 26, 44) : theme.bg, 0, 0));
-        findBar.setBackgroundColor(theme.surface);
+        suggestScroll.setBackground(shape(theme.glass ? Theme.withAlpha(theme.light ? Color.WHITE : Color.rgb(14, 20, 38), 242) : theme.bg, 0, 0));
+        findBar.setBackgroundColor(theme.glass ? Theme.withAlpha(theme.light ? Color.WHITE : Color.rgb(14, 20, 38), 242) : theme.surface);
         findInput.setTextColor(theme.text);
         findInput.setHintTextColor(theme.muted);
         findCount.setTextColor(theme.muted);
@@ -1170,7 +1214,24 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         refreshShieldChrome();
     }
 
+    /** Dark status/navigation-bar icons for light themes. */
+    @SuppressWarnings("deprecation")
+    private void applySystemBarAppearance(boolean light) {
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController c = getWindow().getInsetsController();
+            if (c == null) return;
+            int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+            c.setSystemBarsAppearance(light ? mask : 0, mask);
+        } else {
+            View decor = getWindow().getDecorView();
+            int flags = decor.getSystemUiVisibility();
+            int bits = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | (Build.VERSION.SDK_INT >= 26 ? View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0);
+            decor.setSystemUiVisibility(light ? (flags | bits) : (flags & ~bits));
+        }
+    }
+
     void setTheme(Theme t) {
+        if (incognito && t.light) t = Theme.byId("liquid");
         theme = t;
         prefs.edit().putString("ui_theme", t.id).apply();
         applyTheme();
@@ -1287,7 +1348,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         return n;
     }
 
-    /** GX RAM limiter: keeps only the most recently used tabs alive. */
+    /** Memory saver: keeps only the most recently used tabs alive. */
     private void enforceLimit() {
         int max = prefs.getBoolean("gx_ram_limiter", true) ? Math.max(1, prefs.getInt("gx_max_live", 5)) : 16;
         if (liveTabs() <= max) return;
@@ -2144,8 +2205,8 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     interface Toggle { boolean run(); }
 
     /**
-     * Integrated browser menu: a quick-action strip and page card (Brave style), switchable
-     * quick toggles and a tile grid (Opera GX style). Toggles change in place without closing.
+     * Integrated browser menu: a quick-action strip, a page card with Halo status, switchable
+     * quick toggles and a tile grid. Toggles change in place without closing.
      */
     private void showMenu() {
         final Tab t = current();
@@ -2233,7 +2294,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
                 Tab c = current();
                 return c != null && c.desktop;
             });
-            toggleChip(chips, "⛨", "Shields", shields.shieldsUp(t.topHost), () -> {
+            toggleChip(chips, "⛨", "Halo", shields.shieldsUp(t.topHost), () -> {
                 boolean on = !shields.shieldsUp(t.topHost);
                 shields.setSite(t.topHost, "up", on);
                 reload();
@@ -2265,7 +2326,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         tiles.add(new Object[]{"文", "Translate", (Runnable) this::translate});
         tiles.add(new Object[]{"⊕", "Add to Home", (Runnable) this::addToHome});
         tiles.add(new Object[]{"🎮", "Rewards", (Runnable) this::openRewards});
-        tiles.add(new Object[]{"⚡", "GX Control", (Runnable) this::showGxControl});
+        tiles.add(new Object[]{"⚡", "ASTER Core", (Runnable) this::showGxControl});
         tiles.add(new Object[]{"🎨", "Themes", (Runnable) this::showThemes});
         tiles.add(new Object[]{"⚙", "Settings", (Runnable) this::showSettings});
         tiles.add(new Object[]{"⏻", incognito ? "Close private" : "Exit", (Runnable) this::exitBrowser});
@@ -2661,7 +2722,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         body.setPadding(dp(18), dp(8), dp(18), dp(18));
         final Sheet[] d = new Sheet[1];
 
-        TextView brand = bold("⛨  ASTER SHIELDS", 12, theme.accent);
+        TextView brand = bold("⛨  ASTER HALO", 12, theme.accent);
         brand.setLetterSpacing(0.15f);
         body.addView(brand);
         TextView site = bold(host == null ? "New tab" : host, 21, theme.text);
@@ -2676,7 +2737,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         LinearLayout.LayoutParams srl = new LinearLayout.LayoutParams(-1, -2);
         srl.topMargin = dp(14);
         body.addView(statusRow, srl);
-        TextView status = bold(!shields.enabledGlobally() ? "Shields are off everywhere" : (up ? "Shields are UP for this site" : "Shields are DOWN for this site"), 15, up ? theme.accent : theme.muted);
+        TextView status = bold(!shields.enabledGlobally() ? "Halo is off everywhere" : (up ? "Halo is ON for this site" : "Halo is OFF for this site"), 15, up ? theme.accent : theme.muted);
         statusRow.addView(status, new LinearLayout.LayoutParams(0, -2, 1));
         Switch sw = new Switch(this);
         sw.setChecked(up);
@@ -2726,7 +2787,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
                 d[0].dismiss();
                 updateFilters();
             });
-        rowCard(body, shields.enabledGlobally() ? "Turn Shields off everywhere" : "Turn Shields on everywhere", null, () -> {
+        rowCard(body, shields.enabledGlobally() ? "Turn Halo off everywhere" : "Turn Halo on everywhere", null, () -> {
             prefs.edit().putBoolean("shield_enabled", !shields.enabledGlobally()).apply();
             d[0].dismiss();
             reload();
@@ -2790,14 +2851,14 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             .setPositiveButton("OK", null).show();
     }
 
-    // ================================================================== GX control
+    // ================================================================== ASTER Core
 
     void showGxControl() {
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(dp(18), dp(8), dp(18), dp(18));
         final Sheet[] d = new Sheet[1];
-        TextView title = bold("⚡  GX CONTROL", 13, theme.accent);
+        TextView title = bold("⚡  ASTER CORE", 13, theme.accent);
         title.setLetterSpacing(0.15f);
         body.addView(title);
 
@@ -2831,7 +2892,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         bl.topMargin = dp(10);
         ram.addView(bar, bl);
 
-        switchRow(body, "RAM limiter", "Puts the least-used tabs to sleep to free memory", "gx_ram_limiter", true, this::enforceLimit);
+        switchRow(body, "Memory saver", "Puts the least-used tabs to sleep to free memory", "gx_ram_limiter", true, this::enforceLimit);
         final TextView limitLabel = text(I18n.f("Max active tabs: %d", prefs.getInt("gx_max_live", 5)), 13, theme.text);
         limitLabel.setPadding(dp(6), dp(6), 0, 0);
         body.addView(limitLabel);
@@ -2852,7 +2913,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         });
         body.addView(seek, new LinearLayout.LayoutParams(-1, dp(40)));
 
-        sectionTitle(body, "Hot tabs killer");
+        sectionTitle(body, "Open tabs");
         List<Tab> sorted = new ArrayList<>(tabs);
         Collections.sort(sorted, new Comparator<Tab>() {
             @Override public int compare(Tab a, Tab b) {
@@ -2892,7 +2953,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             if (t != null && t.web != null) t.web.clearCache(true);
             toast("Cache cleared");
         });
-        TextView note = text("Android doesn't let apps cap CPU or bandwidth, so GX Control manages memory by sleeping tabs and saves data by skipping images. WebView renderer memory is reported separately by Android.", 11, theme.muted);
+        TextView note = text("Android doesn't let apps cap CPU or bandwidth, so ASTER Core manages memory by sleeping tabs and saves data by skipping images. WebView renderer memory is reported separately by Android.", 11, theme.muted);
         note.setPadding(dp(4), dp(12), dp(4), 0);
         body.addView(note);
         d[0] = sheet(body);
@@ -2924,7 +2985,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             texts.setOrientation(LinearLayout.VERTICAL);
             texts.setPadding(dp(12), 0, 0, 0);
             texts.addView(bold(t.name, 15, theme.text));
-            texts.addView(text(t.family + (t.glass ? " · " + I18n.t("translucent") : ""), 11, theme.muted));
+            texts.addView(text(t.family, 11, theme.muted));
             row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
             if (t.id.equals(theme.id)) row.addView(bold("✓", 18, t.accent));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -2934,19 +2995,19 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         }
         sectionTitle(body, "Start page");
         rowCard(body, "Wallpaper", wallpaperName(), () -> { d[0].dismiss(); chooseWallpaper(); });
-        rowCard(body, "Navigation style", fabMode() ? "Fast Action Button (GX)" : "Bottom toolbar", () -> { d[0].dismiss(); chooseNavStyle(); });
+        rowCard(body, "Navigation style", fabMode() ? "Orbit button" : "Bottom toolbar", () -> { d[0].dismiss(); chooseNavStyle(); });
         d[0] = sheet(body);
         d[0].show();
     }
 
     private String wallpaperName() {
-        String id = prefs.getString("home_wallpaper", theme.isGx() ? "synthwave" : "nebula");
+        String id = prefs.getString("home_wallpaper", theme.defaultWallpaper());
         for (int i = 0; i < StartPage.WALLPAPER_IDS.length; i++) if (StartPage.WALLPAPER_IDS[i].equals(id)) return StartPage.WALLPAPER_NAMES[i];
         return StartPage.WALLPAPER_NAMES[0];
     }
 
     private void chooseWallpaper() {
-        String id = prefs.getString("home_wallpaper", theme.isGx() ? "synthwave" : "nebula");
+        String id = prefs.getString("home_wallpaper", theme.defaultWallpaper());
         int checked = 0;
         for (int i = 0; i < StartPage.WALLPAPER_IDS.length; i++) if (StartPage.WALLPAPER_IDS[i].equals(id)) checked = i;
         choose("Start page wallpaper", StartPage.WALLPAPER_NAMES, checked, w -> {
@@ -2956,7 +3017,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     }
 
     private void chooseNavStyle() {
-        choose("Navigation style", new String[]{"Bottom toolbar", "Fast Action Button (GX)"}, fabMode() ? 1 : 0, w -> {
+        choose("Navigation style", new String[]{"Bottom toolbar", "Orbit button"}, fabMode() ? 1 : 0, w -> {
             prefs.edit().putString("nav_style", w == 1 ? "fab" : "bar").apply();
             layoutChrome();
             if (w == 1) toast("Tap the button for actions · swipe ← → for back/forward · swipe ↑ for tabs");
@@ -2971,7 +3032,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
         sectionTitle(b, "Appearance");
         rowCard(b, "Theme", theme.name, () -> { p.dismiss(); showThemes(); });
-        rowCard(b, "Navigation style", fabMode() ? "Fast Action Button (GX)" : "Bottom toolbar", () -> { p.dismiss(); chooseNavStyle(); });
+        rowCard(b, "Navigation style", fabMode() ? "Orbit button" : "Bottom toolbar", () -> { p.dismiss(); chooseNavStyle(); });
         rowCard(b, "Address bar position", addressBottom() ? "Bottom" : "Top", () -> {
             p.dismiss();
             choose("Address bar position", new String[]{"Top", "Bottom"}, addressBottom() ? 1 : 0, w -> {
@@ -2979,7 +3040,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
                 layoutChrome();
             });
         });
-        rowCard(b, "Start page", "Wallpaper, stats, clock, speed dial, GX Corner", () -> { p.dismiss(); showStartCustomization(); });
+        rowCard(b, "Start page", "Wallpaper, stats, clock, speed dial, Arcade", () -> { p.dismiss(); showStartCustomization(); });
         rowCard(b, "Text size", prefs.getInt("text_zoom", 100) + "%", () -> {
             p.dismiss();
             final int[] sizes = {85, 100, 115, 130, 150, 175};
@@ -2989,8 +3050,8 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             choose("Text size", labels, checked, w -> { prefs.edit().putInt("text_zoom", sizes[w]).apply(); applyAllSettings(); });
         });
         switchRow(b, "Night mode for websites", "Darkens light web pages", "night_mode", false, () -> { applyAllSettings(); reload(); });
-        switchRow(b, "GX sounds", "Interface sound effects", "gx_sounds", true, () -> {
-            if (prefs.getBoolean("gx_sounds", true)) { if (sounds == null) sounds = new GxSounds(); }
+        switchRow(b, "Interface sounds", "Interface sound effects", "gx_sounds", true, () -> {
+            if (prefs.getBoolean("gx_sounds", true)) { if (sounds == null) sounds = new UiSounds(); }
             else if (sounds != null) { sounds.release(); sounds = null; }
         });
         switchRow(b, "Haptic feedback", "Vibrate lightly on taps", "gx_haptics", true, null);
@@ -3018,8 +3079,8 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         });
         switchRow(b, "Search suggestions", "Ask your search engine for suggestions while typing", "suggestions", !incognito, null);
 
-        sectionTitle(b, "Shields & privacy");
-        switchRow(b, "Shields", "Block ads and trackers on all sites", "shield_enabled", true, this::refreshShieldChrome);
+        sectionTitle(b, "Halo & privacy");
+        switchRow(b, "Halo", "Block ads and trackers on all sites", "shield_enabled", true, this::refreshShieldChrome);
         rowCard(b, "Blocking mode", shields.aggressive() ? "Aggressive" : "Standard", () -> {
             p.dismiss();
             choose("Blocking mode", new String[]{"Standard", "Aggressive"}, shields.aggressive() ? 1 : 0,
@@ -3028,9 +3089,9 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         switchRow(b, "Hide ad elements", "Cosmetic filtering from EasyList & AdGuard", "shield_cosmetic", true, null);
         switchRow(b, "Block fingerprinting", "Randomize canvas, audio and hardware signals", "shield_fingerprint", true, null);
         rowCard(b, "Update filter lists", I18n.f("%s network rules", StartPage.formatCount(shields.ruleCount())), this::updateFilters);
-        rowCard(b, "Per-site Shields", I18n.f("%d customized sites", shields.customizedSites().size()), () -> { p.dismiss(); showShieldSites(); });
+        rowCard(b, "Per-site Halo", I18n.f("%d customized sites", shields.customizedSites().size()), () -> { p.dismiss(); showShieldSites(); });
         rowCard(b, "Site permissions", "Camera, microphone and location", () -> { p.dismiss(); showSitePermissions(); });
-        rowCard(b, "Reset Shields statistics", I18n.f("%s blocked so far", StartPage.formatCount(shields.totalBlocked())), () -> {
+        rowCard(b, "Reset Halo statistics", I18n.f("%s blocked so far", StartPage.formatCount(shields.totalBlocked())), () -> {
             shields.resetStats();
             refreshStartPages();
             toast("Statistics reset");
@@ -3094,7 +3155,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
     private void showStartCustomization() {
         final String[] keys = {"home_show_stats", "home_show_clock", "home_show_shortcuts", "home_show_bookmarks", "home_show_gx_corner"};
-        final String[] labels = {"Shields statistics", "Clock & date", "Speed dial", "Bookmarks", "GX Corner (free games)"};
+        final String[] labels = {"Halo statistics", "Clock & date", "Speed dial", "Bookmarks", "Arcade (free games)"};
         final boolean[] checked = new boolean[keys.length];
         for (int i = 0; i < keys.length; i++) checked[i] = prefs.getBoolean(keys[i], true);
         new I18n.Builder(this).setTitle("Customize start page")
@@ -3113,25 +3174,25 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private void showShieldSites() {
         final List<String> sites = shields.customizedSites();
         if (sites.isEmpty()) {
-            new I18n.Builder(this).setTitle("Per-site Shields").setMessage("No sites have custom Shields settings yet.")
+            new I18n.Builder(this).setTitle("Per-site Halo").setMessage("No sites have custom Halo settings yet.")
                 .setPositiveButton("OK", null).show();
             return;
         }
         String[] labels = new String[sites.size()];
         for (int i = 0; i < sites.size(); i++) {
             String h = sites.get(i);
-            labels[i] = h + (shields.siteFlag(h, "up", true) ? "" : "  · " + I18n.t("Shields down")) + (shields.siteFlag(h, "scripts", false) ? "  · " + I18n.t("scripts blocked") : "");
+            labels[i] = h + (shields.siteFlag(h, "up", true) ? "" : "  · " + I18n.t("Halo off")) + (shields.siteFlag(h, "scripts", false) ? "  · " + I18n.t("scripts blocked") : "");
         }
-        new I18n.Builder(this).setTitle("Per-site Shields")
+        new I18n.Builder(this).setTitle("Per-site Halo")
             .setItems(labels, (d, w) -> new I18n.Builder(this).setTitle(sites.get(w))
-                .setMessage("Reset this site to the global Shields settings?")
+                .setMessage("Reset this site to the global Halo settings?")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Reset", (dd, ww) -> { shields.resetSite(sites.get(w)); toast("Reset"); }).show())
             .setPositiveButton("Close", null).show();
     }
 
     private void clearDataDialog() {
-        final String[] labels = {"Browsing history", "Cookies and site data", "Cached images and files", "Shields statistics"};
+        final String[] labels = {"Browsing history", "Cookies and site data", "Cached images and files", "Halo statistics"};
         final boolean[] checked = {true, true, true, false};
         new I18n.Builder(this).setTitle("Clear browsing data")
             .setMultiChoiceItems(labels, checked, (d, w, on) -> checked[w] = on)
@@ -3388,13 +3449,13 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         b.show();
     }
 
-    // ================================================================== GX Corner
+    // ================================================================== Arcade
 
     void refreshGxCorner(final boolean force) {
         if (incognito || !prefs.getBoolean("home_show_gx_corner", true)) return;
         long age = System.currentTimeMillis() - prefs.getLong("gx_corner_time", 0L);
         if (!force && age < 6L * 60L * 60L * 1000L && !prefs.getString("gx_corner_cache", "").isEmpty()) return;
-        if (force) toast("Refreshing GX Corner…");
+        if (force) toast("Refreshing Arcade…");
         new Thread(() -> {
             HttpURLConnection c = null;
             try {
@@ -3452,7 +3513,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private void showBackup() {
         if (incognito) { toast("Use a normal window for backups"); return; }
         new I18n.Builder(this).setTitle("Backup & restore")
-            .setMessage("Export bookmarks, history, speed dial, Shields settings, preferences and open tabs to a JSON file you control. Cookies and passwords are never included.")
+            .setMessage("Export bookmarks, history, speed dial, Halo settings, preferences and open tabs to a JSON file you control. Cookies and passwords are never included.")
             .setNegativeButton("Import", (d, w) -> {
                 Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
