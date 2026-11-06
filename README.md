@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Current Android version: **1.3.0**.
+Current Android version: **1.4.0**.
 
 ASTER is an original, privacy-first Android browser with a night-sky identity: built-in ad and tracker blocking (**ASTER Halo**), memory management (**ASTER Core**), a living start page with free games (**Arcade**), the **Orbit button** and a set of hand-made themes — including a full **Liquid Glass** look.
 
@@ -25,7 +25,7 @@ ASTER is an original, privacy-first Android browser with a night-sky identity: b
 Live memory usage, **memory saver** (puts least-used tabs to sleep), open-tab overview with sleep/close, data saver (no images) and cache cleaner.
 
 ### 🕹 Arcade
-Free-game giveaways on the start page (GamerPower API).
+A gaming hub: Epic Games Store's free games of the week (and upcoming ones), giveaways for Steam, Xbox, PlayStation, GOG, mobile, Switch and DLC (GamerPower), and gaming news from GameSpot, PC Gamer, Xbox Wire, PlayStation Blog and Vandal.
 
 ### 🧭 Browsing
 - **Integrated menu**: quick actions, current-page card with Halo status, in-place quick toggles and a tile grid. All panels open inside the browser and can be dragged down to close; pages slide in and close with back.
@@ -46,7 +46,8 @@ Free-game giveaways on the start page (GamerPower API).
 | `PrivateActivity.java` | Private window (separate process + WebView profile) |
 | `ShieldEngine.java` | ASTER Halo: filter lists, network + cosmetic blocking, per-site settings, stats |
 | `Glass.java` | Liquid Glass materials and blurred backdrops |
-| `StartPage.java` | Start page HTML, search engines, wallpapers, Arcade |
+| `StartPage.java` | Start page HTML, search engines, wallpapers |
+| `Arcade.java`, `ArcadePage.java` | Arcade data (Epic, GamerPower, RSS news) and screen |
 | `Scripts.java` | Injected JavaScript (cosmetic CSS, YouTube, fingerprinting, reader, night mode) |
 | `Store.java` | Bookmarks, history, speed dial, downloads and session |
 | `FabMenu.java` | Orbit button |

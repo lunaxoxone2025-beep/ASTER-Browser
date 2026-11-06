@@ -441,6 +441,30 @@ final class I18n {
         es("Open settings", "Abrir ajustes");
         es("Android could not open the installer", "Android no pudo abrir el instalador");
 
+        // ---- Arcade screen
+        es("Free now on Epic", "Gratis ahora en Epic");
+        es("Coming soon on Epic", "Próximamente en Epic");
+        es("Giveaways", "Regalos y ofertas gratis");
+        es("Mobile", "Móvil");
+        es("All", "Todo");
+        es("DLC & extras", "DLC y extras");
+        es("Get it", "Conseguir");
+        es("Free until %s", "Gratis hasta el %s");
+        es("Free from %s", "Gratis desde el %s");
+        es("Ends %s", "Termina el %s");
+        es("No end date", "Sin fecha de fin");
+        es("Updated %s", "Actualizado %s");
+        es("Loading Arcade…", "Cargando Arcade…");
+        es("Nothing here right now.", "Ahora mismo no hay nada aquí.");
+        es("Refresh", "Actualizar");
+        es("News", "Noticias");
+        es("Data: Epic Games Store, GamerPower and each site's RSS feed. Offers can end early — check the store page.",
+            "Datos: Epic Games Store, GamerPower y el RSS de cada medio. Las ofertas pueden terminar antes: revisa la página de la tienda.");
+        es("Refreshing Arcade…", "Actualizando Arcade…");
+        es("Couldn't load Arcade — check your connection", "No se pudo cargar Arcade: revisa tu conexión");
+        es("SEE ALL", "VER TODO");
+        es("Epic, Steam, Xbox & gaming news", "Epic, Steam, Xbox y noticias gaming");
+        es("Open Arcade", "Abrir Arcade");
         // ---- start page
         es("You are in a private window.", "Estás en una ventana privada.");
         es("ASTER won't save your history, session or site data from this window. Cookies and storage live in a separate, isolated profile and are wiped when you close it. Halo still blocks ads and trackers.",

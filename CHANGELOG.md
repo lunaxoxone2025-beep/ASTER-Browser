@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.0] - 2026-11-06
+Arcade grows into a full gaming hub.
+
+### Added
+- **Arcade screen** (start page → "See all", or menu → Arcade) with two tabs:
+  - **Free games**: this week's free games on the **Epic Games Store** (official promotions feed) with upcoming ones, plus giveaways filterable by **Steam, Epic, Xbox, PlayStation, GOG, PC, mobile, Switch** and **DLC & extras** (GamerPower).
+  - **News**: latest gaming news from **GameSpot, PC Gamer, Xbox Wire, PlayStation Blog** and, in Spanish, **Vandal**, filterable by outlet.
+- Data is cached for 30 minutes and refreshed in place; links open in a new tab.
+
 ## [1.3.1] - 2026-11-06
 Smoothness fixes.
 

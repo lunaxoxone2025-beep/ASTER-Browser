@@ -122,6 +122,7 @@ final class StartPage {
             .append(".game{flex:0 0 210px;scroll-snap-align:start;border-radius:16px;overflow:hidden;background:var(--s);border:1px solid var(--b);color:var(--t);text-decoration:none}")
             .append(".game img{width:100%;height:105px;object-fit:cover;display:block;background:#0004}.game div{padding:9px 11px}.game b{display:block;font-size:12.5px;line-height:1.3;max-height:33px;overflow:hidden}.game span{display:block;margin-top:4px;font-size:10.5px;color:var(--a);font-weight:700}")
             .append(".empty{color:var(--m);font-size:12px;padding:6px 2px}")
+            .append(".game.more{display:flex;align-items:center;flex-basis:170px}.game.more div{padding:16px}")
             .append(".foot{margin-top:auto;padding-top:36px;display:flex;justify-content:center;gap:10px}.foot a{color:var(--m);text-decoration:none;font-size:11px;letter-spacing:1px;padding:8px 14px;border:1px solid var(--b);border-radius:20px;background:var(--s)}")
             .append(".priv{margin:26px auto 0;max-width:620px;padding:16px 18px;border-radius:18px;background:var(--s);border:1px solid var(--b);font-size:13px;line-height:1.55;color:var(--m)}.priv b{color:var(--t)}")
             .append(wallpaperCss(wallpaper, t))
@@ -170,7 +171,7 @@ final class StartPage {
             }
 
             if (prefs.getBoolean("home_show_gx_corner", true)) {
-                h.append("<h3><span>Arcade &middot; ").append(esc(I18n.t("Free games"))).append("</span><a href='aster://gxcorner/refresh'>").append(esc(I18n.t("REFRESH"))).append("</a></h3>");
+                h.append("<h3><span>Arcade &middot; ").append(esc(I18n.t("Free games"))).append("</span><a href='aster://arcade'>").append(esc(I18n.t("SEE ALL"))).append("</a></h3>");
                 h.append("<div id='arcade-box'>").append(gxCorner(gxCornerJson)).append("</div>");
             }
             h.append("<div class='foot'><a href='aster://customize'>&#9881; ").append(esc(I18n.t("CUSTOMIZE"))).append("</a><a href='aster://shields'>&#9960; HALO</a></div>");
@@ -252,6 +253,8 @@ final class StartPage {
             }
         } catch (Exception ignored) { }
         if (count == 0) return "<div class='empty'>" + esc(I18n.t("No free games right now. Check back later.")) + "</div>";
+        h.append("<a class='game more' href='aster://arcade'><div><b>🕹 ").append(esc(I18n.t("Epic, Steam, Xbox & gaming news"))).append("</b><span>")
+            .append(esc(I18n.t("Open Arcade"))).append(" →</span></div></a>");
         return h.append("</div>").toString();
     }
 

@@ -654,6 +654,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         final ScrollView scroll;
         private final boolean fromBottom;
         private boolean closing;
+        Runnable onDismiss;
 
         Page(String title) { this(title, false); }
 
@@ -731,7 +732,10 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             if (fromBottom) root.animate().translationY(dp(90)).scaleX(0.96f).scaleY(0.96f);
             else root.animate().translationX(root.getWidth() * 0.3f);
             root.animate().alpha(0f).setDuration(190).setInterpolator(new AccelerateInterpolator(1.5f))
-                .withEndAction(() -> overlayLayer.removeView(root)).start();
+                .withEndAction(() -> {
+                    overlayLayer.removeView(root);
+                    if (onDismiss != null) onDismiss.run();
+                }).start();
         }
     }
 
@@ -1891,6 +1895,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             case "shields": showShields(); break;
             case "bookmarks": showBookmarks(); break;
             case "gxcorner": refreshGxCorner(true); break;
+            case "arcade": showArcade(); break;
             default: break;
         }
     }
@@ -2354,6 +2359,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         tiles.add(new Object[]{"🔎", "Find in page", (Runnable) this::openFind});
         tiles.add(new Object[]{"文", "Translate", (Runnable) this::translate});
         tiles.add(new Object[]{"⊕", "Add to Home", (Runnable) this::addToHome});
+        tiles.add(new Object[]{"🕹", "Arcade", (Runnable) this::showArcade});
         tiles.add(new Object[]{"🎮", "Rewards", (Runnable) this::openRewards});
         tiles.add(new Object[]{"⚡", "ASTER Core", (Runnable) this::showGxControl});
         tiles.add(new Object[]{"🎨", "Themes", (Runnable) this::showThemes});
@@ -3483,6 +3489,72 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     }
 
     // ================================================================== Arcade
+
+    // ================================================================== Arcade screen
+
+    private static final long ARCADE_TTL = 30L * 60L * 1000L;
+    private boolean arcadeLoading;
+
+    /** Full Arcade screen: free games per store (Epic, Steam, Xbox, PlayStation, GOG, mobile, DLC) and gaming news. */
+    void showArcade() {
+        final Page page = new Page("Arcade", true);
+        page.scroll.setVisibility(View.GONE);
+        final WebView web = new WebView(this);
+        web.setBackgroundColor(Color.TRANSPARENT);
+        WebSettings ws = web.getSettings();
+        ws.setJavaScriptEnabled(true);
+        ws.setDomStorageEnabled(false);
+        ws.setAllowFileAccess(false);
+        ws.setAllowContentAccess(false);
+        ws.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        ws.setTextZoom(prefs.getInt("text_zoom", 100));
+        web.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        web.setWebViewClient(new WebViewClient() {
+            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+                if (url.startsWith("aster://arcade/refresh")) {
+                    loadArcadeData(web, true);
+                } else if (Store.isWeb(url)) {
+                    page.dismiss();
+                    openInNewTab(url.replaceFirst("^http://", "https://"), false);
+                }
+                return true;
+            }
+
+            @Override public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                page.dismiss();
+                return true;
+            }
+        });
+        page.root.addView(web, 2, new LinearLayout.LayoutParams(-1, 0, 1));
+        page.onDismiss = () -> {
+            try { web.destroy(); } catch (Exception ignored) { }
+        };
+        String cached = prefs.getString("arcade_cache", "");
+        web.loadDataWithBaseURL(ArcadePage.BASE_URL, ArcadePage.build(theme, cached), "text/html", "UTF-8", null);
+        page.show();
+        long age = System.currentTimeMillis() - prefs.getLong("arcade_time", 0L);
+        if (cached.isEmpty() || age > ARCADE_TTL) loadArcadeData(web, false);
+    }
+
+    private void loadArcadeData(final WebView web, final boolean manual) {
+        if (arcadeLoading) return;
+        arcadeLoading = true;
+        if (manual) toast("Refreshing Arcade…");
+        final String country = Locale.getDefault().getCountry();
+        new Thread(() -> {
+            JSONObject data = Arcade.fetchAll(I18n.es, country);
+            final String json = data.toString();
+            boolean ok = data.has("fetched");
+            if (ok && !incognito) prefs.edit().putString("arcade_cache", json).putLong("arcade_time", System.currentTimeMillis()).apply();
+            final boolean success = ok;
+            ui.post(() -> {
+                arcadeLoading = false;
+                try { web.evaluateJavascript("window.asterUpdate&&asterUpdate(" + json + ");", null); } catch (Exception ignored) { }
+                if (!success && manual) toast("Couldn't load Arcade — check your connection");
+            });
+        }, "ASTER-arcade").start();
+    }
 
     void refreshGxCorner(final boolean force) {
         if (incognito || !prefs.getBoolean("home_show_gx_corner", true)) return;
