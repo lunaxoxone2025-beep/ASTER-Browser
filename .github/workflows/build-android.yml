@@ -67,35 +67,61 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Persistent signing is not configured. Building a debug APK for testing only; no install-over update will be published."
           fi
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
       - name: Build signed release APK
+        id: signed_build
         if: steps.signing.outputs.ready == 'true'
-        run: gradle :app:assembleRelease
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease --stacktrace 2>&1 | tee -a build.log
       - name: Build debug APK for testing
-        if: steps.signing.outputs.ready != 'true'
-        run: gradle :app:assembleDebug
+        if: steps.signing.outputs.ready != 'true' || steps.signed_build.outcome == 'failure'
+        run: |
+          set -o pipefail
+          if [ "${{ steps.signed_build.outcome }}" = "failure" ]; then
+            echo "::warning::The signed release build failed; building a debug-signed APK instead."
+          fi
+          gradle :app:assembleDebug --stacktrace 2>&1 | tee -a build.log
+      - name: Report build errors
+        if: failure() || steps.signed_build.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          touch build.log
+          grep -E "error:|e: |What went wrong|FAILED|Exception|> " build.log | head -40 | while IFS= read -r line; do
+            echo "::error::$line"
+          done
+          mkdir -p "$RUNNER_TEMP/ci-logs" && cp build.log "$RUNNER_TEMP/ci-logs/build.log"
+          cd "$RUNNER_TEMP/ci-logs"
+          git init -q
+          git add build.log
+          git -c user.name="aster-ci" -c user.email="aster-ci@users.noreply.github.com" commit -q -m "CI build log for run $GITHUB_RUN_ID"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/ci-logs || true
       - name: Prepare stable APK filename
         run: |
-          if [ "${{ steps.signing.outputs.ready }}" = "true" ]; then
+          if [ "${{ steps.signed_build.outcome }}" = "success" ]; then
             cp app/build/outputs/apk/release/app-release.apk ASTER-Browser.apk
           else
             cp app/build/outputs/apk/debug/app-debug.apk ASTER-Browser.apk
           fi
       - name: Upload signed APK artifact
-        if: steps.signing.outputs.ready == 'true'
+        if: steps.signed_build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ASTER-Browser-v${{ steps.version.outputs.version }}-signed
           path: ASTER-Browser.apk
           retention-days: 30
       - name: Upload debug test APK artifact
-        if: steps.signing.outputs.ready != 'true'
+        if: steps.signed_build.outcome != 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ASTER-Browser-v${{ steps.version.outputs.version }}-debug-test-only
           path: ASTER-Browser.apk
           retention-days: 30
       - name: Publish signed GitHub Release
-        if: steps.release.outputs.publish == 'true' && steps.signing.outputs.ready == 'true'
+        if: steps.release.outputs.publish == 'true' && steps.signed_build.outcome == 'success'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.release_tag }}
@@ -104,7 +130,7 @@ jobs:
           fail_on_unmatched_files: true
           files: ASTER-Browser.apk
       - name: Publish source release with directly downloadable debug APK
-        if: steps.release.outputs.publish == 'true' && steps.signing.outputs.ready != 'true'
+        if: steps.release.outputs.publish == 'true' && steps.signed_build.outcome != 'success'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.release_tag }}

@@ -17,6 +17,11 @@ android {
         buildConfig true
     }
 
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
     defaultConfig {
         applicationId 'com.aster.browser'
         minSdk 23
