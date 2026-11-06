@@ -91,8 +91,8 @@ final class Theme {
 
     /** Default start-page wallpaper for this theme. */
     String defaultWallpaper() {
-        if (glass) return "aurora";
-        return vivid ? "synthwave" : "nebula";
+        // Static by default: no animation running in the background, so it costs no battery.
+        return "minimal";
     }
 
     static String css(int color) {

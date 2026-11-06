@@ -481,6 +481,8 @@ final class I18n {
         es("A report was saved on this device. Copy or share it so the problem can be fixed. Nothing has been sent anywhere.",
             "Se guardó un informe en este dispositivo. Cópialo o compártelo para que se pueda arreglar el problema. No se ha enviado nada a ningún sitio.");
         es("Copy report", "Copiar informe");
+        es("ASTER Island", "ASTER Island");
+        es("Tap the island to search · swipe ← → to switch tabs · swipe ↑ for all tabs", "Toca la isla para buscar · desliza ← → para cambiar de pestaña · desliza ↑ para ver todas");
         // ---- start page
         es("You are in a private window.", "Estás en una ventana privada.");
         es("ASTER won't save your history, session or site data from this window. Cookies and storage live in a separate, isolated profile and are wiped when you close it. Halo still blocks ads and trackers.",

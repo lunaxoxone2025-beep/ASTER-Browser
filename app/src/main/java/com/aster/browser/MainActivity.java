@@ -152,6 +152,10 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private HorizontalScrollView tabStripScroll;
     private LinearLayout tabStrip;
     private boolean bottomBarHidden;
+    private FrameLayout island;
+    private TextView islandShield, islandTitle, islandHost, islandTabs, islandMenu;
+    private View islandProgress;
+    private boolean searchMode;
     private boolean resumed;
     private ProgressBar progress;
     private ScrollView suggestScroll;
@@ -434,7 +438,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     @Override public boolean dispatchKeyEvent(KeyEvent e) {
         if (e.getAction() == KeyEvent.ACTION_DOWN && e.isCtrlPressed() && address != null) {
             switch (e.getKeyCode()) {
-                case KeyEvent.KEYCODE_L: address.requestFocus(); showKeyboard(address); return true;
+                case KeyEvent.KEYCODE_L: enterSearch(); return true;
                 case KeyEvent.KEYCODE_T: openInNewTab(null, false); return true;
                 case KeyEvent.KEYCODE_W: closeTab(active); return true;
                 case KeyEvent.KEYCODE_R: reload(); return true;
@@ -928,6 +932,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             } else {
                 suggestScroll.setVisibility(View.GONE);
                 updateAddress();
+                exitSearch();
                 setBottomBarHidden(false);
             }
         });
@@ -1028,6 +1033,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         backBtn.setOnLongClickListener(v -> { showHistory(); return true; });
         TextView[] items = {backBtn, forwardBtn, newTabBtn, tabsBottom, menuBtn};
         for (TextView item : items) bottomBar.addView(item, new LinearLayout.LayoutParams(0, dp(46), 1));
+        buildIsland();
         applyTheme();
         layoutChrome();
     }
@@ -1074,7 +1080,170 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         webArea.addView(findBar, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
     }
 
-    private boolean fabMode() { return "fab".equals(prefs.getString("nav_style", "bar")); }
+    private String navStyle() { return prefs.getString("nav_style", "island"); }
+    private boolean fabMode() { return "fab".equals(navStyle()); }
+    /** ASTER Island: the whole interface in one small capsule at the bottom (phones). */
+    private boolean islandMode() { return "island".equals(navStyle()) && !wide(); }
+
+    private String navStyleName() {
+        String n = navStyle();
+        return "fab".equals(n) ? "Orbit button" : ("bar".equals(n) ? "Bottom toolbar" : "ASTER Island");
+    }
+
+    private void buildIsland() {
+        island = new FrameLayout(this);
+        island.setClickable(true);
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(5), 0, dp(4), 0);
+        islandShield = bold("✦", 15, Color.WHITE);
+        islandShield.setGravity(Gravity.CENTER);
+        islandShield.setContentDescription(I18n.t("ASTER Halo"));
+        onTap(islandShield, this::showShields);
+        row.addView(islandShield, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        final LinearLayout mid = new LinearLayout(this);
+        mid.setOrientation(LinearLayout.VERTICAL);
+        mid.setGravity(Gravity.CENTER_VERTICAL);
+        mid.setPadding(dp(10), 0, dp(6), 0);
+        islandTitle = bold("", 14, Color.WHITE);
+        islandTitle.setSingleLine(true);
+        islandTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        islandHost = text("", 11, Color.GRAY);
+        islandHost.setSingleLine(true);
+        islandHost.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+        mid.addView(islandTitle);
+        mid.addView(islandHost);
+        mid.setContentDescription(I18n.t("Search or type URL"));
+        row.addView(mid, new LinearLayout.LayoutParams(0, -1, 1));
+        onTap(mid, this::enterSearch);
+        final GestureDetector islandGestures = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
+                if (e1 == null || e2 == null) return false;
+                float dx = e2.getX() - e1.getX();
+                float dy = e2.getY() - e1.getY();
+                if (Math.abs(dx) > dp(40) && Math.abs(dx) > Math.abs(dy) * 1.5f && tabs.size() > 1) {
+                    switchTabBySwipe(dx < 0 ? 1 : -1);
+                    return true;
+                }
+                if (dy < -dp(30) && Math.abs(dy) > Math.abs(dx)) {
+                    feedback(island);
+                    showTabs();
+                    return true;
+                }
+                return false;
+            }
+        });
+        mid.setOnTouchListener((v, e) -> islandGestures.onTouchEvent(e));
+        mid.setOnLongClickListener(v -> {
+            Tab t = current();
+            if (t != null && !t.start && Store.isWeb(t.url)) { copy(t.url); return true; }
+            return false;
+        });
+        islandTabs = chromeButton("1", 13, "Tabs");
+        islandTabs.setTypeface(Typeface.DEFAULT_BOLD);
+        onTap(islandTabs, this::showTabs);
+        islandTabs.setOnLongClickListener(v -> { openInNewTab(null, false); return true; });
+        row.addView(islandTabs, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        islandMenu = chromeButton("⋯", 22, "Menu");
+        onTap(islandMenu, this::showMenu);
+        islandMenu.setOnLongClickListener(v -> { goForward(); return true; });
+        row.addView(islandMenu, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        island.addView(row, new FrameLayout.LayoutParams(-1, -1));
+        islandProgress = new View(this);
+        islandProgress.setPivotX(0);
+        islandProgress.setScaleX(0f);
+        islandProgress.setVisibility(View.INVISIBLE);
+        FrameLayout.LayoutParams pl = new FrameLayout.LayoutParams(-1, dp(2), Gravity.BOTTOM);
+        pl.setMargins(dp(22), 0, dp(22), dp(3));
+        island.addView(islandProgress, pl);
+    }
+
+    /** Styles the island and, in island mode, the search card that replaces it while typing. */
+    private void styleIsland() {
+        if (island == null) return;
+        if (theme.glass) {
+            island.setBackground(Glass.material(theme, Glass.radii(dp(28)), getResources().getDisplayMetrics().density, theme.light ? 175 : 150));
+            island.setElevation(0);
+        } else {
+            island.setBackground(shape(incognito ? Color.rgb(40, 24, 64) : Theme.blend(theme.bg, theme.surface2, 0.7f), 28, Theme.withAlpha(theme.accent, 70)));
+            island.setElevation(dp(10));
+        }
+        islandTitle.setTextColor(theme.text);
+        islandHost.setTextColor(theme.muted);
+        islandMenu.setTextColor(theme.text);
+        islandMenu.setBackground(pressable(Color.TRANSPARENT, 20, 0));
+        islandTabs.setTextColor(theme.text);
+        GradientDrawable box = shape(Color.TRANSPARENT, 7, theme.text);
+        box.setStroke(dp(2), theme.text);
+        islandTabs.setBackground(new android.graphics.drawable.InsetDrawable(box, dp(10), dp(10), dp(10), dp(10)));
+        islandProgress.setBackground(shape(theme.accent, 1, 0));
+        if (islandMode()) {
+            if (theme.glass) toolbar.setBackground(Glass.material(theme, Glass.radii(dp(26)), getResources().getDisplayMetrics().density, theme.light ? 190 : 170));
+            else toolbar.setBackground(shape(Theme.blend(theme.bg, theme.surface2, 0.7f), 26, Theme.withAlpha(theme.accent, 90)));
+            toolbar.setElevation(theme.glass ? 0 : dp(12));
+        } else {
+            toolbar.setElevation(0);
+        }
+        updateIsland();
+    }
+
+    private void updateIsland() {
+        if (island == null) return;
+        Tab t = current();
+        if (t == null || t.start) {
+            islandTitle.setText(incognito ? I18n.t("Private tab") : "ASTER");
+            islandHost.setText(I18n.t("Search or type URL"));
+        } else {
+            islandTitle.setText((t.reader ? "📖 " : "") + t.displayTitle());
+            String url = t.web != null && t.web.getUrl() != null && !t.reader ? t.web.getUrl() : t.url;
+            islandHost.setText((url != null && url.startsWith("https://") ? "🔒 " : "") + Store.hostOf(url));
+        }
+        islandTabs.setText(tabs.size() > 99 ? ":D" : String.valueOf(tabs.size()));
+        String host = t == null || t.start ? null : t.topHost;
+        boolean up = shields.shieldsUp(host);
+        int n = t == null ? 0 : t.blocked();
+        islandShield.setText(n > 0 && up ? (n > 99 ? "99+" : String.valueOf(n)) : "✦");
+        islandShield.setTextSize(n > 9 && up ? 12 : 15);
+        GradientDrawable dot = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            up ? new int[]{theme.accent, theme.accent2} : new int[]{theme.surface2, theme.surface2});
+        dot.setShape(GradientDrawable.OVAL);
+        islandShield.setBackground(new android.graphics.drawable.InsetDrawable(dot, dp(3), dp(3), dp(3), dp(3)));
+        islandShield.setTextColor(up ? Color.WHITE : theme.muted);
+        boolean loading = t != null && t.loading && t.progress < 100;
+        islandProgress.setVisibility(loading ? View.VISIBLE : View.INVISIBLE);
+        if (loading) islandProgress.setScaleX(Math.max(0.05f, t.progress / 100f));
+    }
+
+    /** Island mode: the capsule turns into a search card right above the keyboard. */
+    void enterSearch() {
+        if (!islandMode()) {
+            address.requestFocus();
+            showKeyboard(address);
+            return;
+        }
+        searchMode = true;
+        island.setVisibility(View.GONE);
+        toolbar.setVisibility(View.VISIBLE);
+        toolbar.setAlpha(0f);
+        toolbar.setTranslationY(dp(16));
+        toolbar.animate().alpha(1f).translationY(0).setDuration(180).setInterpolator(new DecelerateInterpolator(2f)).start();
+        address.requestFocus();
+        address.postDelayed(() -> showKeyboard(address), 60);
+    }
+
+    private void exitSearch() {
+        if (!searchMode) return;
+        searchMode = false;
+        toolbar.setVisibility(View.GONE);
+        island.setVisibility(View.VISIBLE);
+        island.setAlpha(0f);
+        island.animate().alpha(1f).setDuration(160).start();
+        updateIsland();
+    }
+
+    private static void detach(View v) {
+        if (v != null && v.getParent() != null) ((ViewGroup) v.getParent()).removeView(v);
+    }
     /** Tablets, unfolded foldables, Chromebooks and large split-screen windows. */
     private boolean wide() { return getResources().getConfiguration().screenWidthDp >= 600; }
 
@@ -1134,12 +1303,14 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
      * so the page never changes size (no jumps, no fighting with the scroll position).
      */
     private void setBottomBarHidden(boolean hide) {
-        if (bottomBarHidden == hide || bottomBar.getParent() == null) return;
+        final View bar = island != null && island.getParent() != null ? island : bottomBar;
+        if (bottomBarHidden == hide || bar.getParent() == null) return;
+        if (hide && searchMode) return;
         bottomBarHidden = hide;
-        ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) bottomBar.getLayoutParams();
-        float distance = bottomBar.getHeight() + (lp == null ? 0 : lp.bottomMargin) + dp(12);
-        bottomBar.animate().cancel();
-        bottomBar.animate()
+        ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) bar.getLayoutParams();
+        float distance = bar.getHeight() + (lp == null ? 0 : lp.bottomMargin) + dp(12);
+        bar.animate().cancel();
+        bar.animate()
             .translationY(hide ? distance : 0)
             .alpha(hide ? 0f : 1f)
             .setDuration(hide ? 200 : 240)
@@ -1155,6 +1326,49 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     /** Places toolbar / bottom bar according to navigation preferences and screen width. */
     private void layoutChrome() {
         content.removeAllViews();
+        detach(toolbar);
+        detach(island);
+        detach(bottomBar);
+        searchMode = false;
+        island.animate().cancel();
+        island.setTranslationY(0);
+        island.setAlpha(1f);
+        island.setVisibility(View.VISIBLE);
+        toolbar.setAlpha(1f);
+        toolbar.setTranslationY(0);
+        toolbar.setVisibility(View.VISIBLE);
+        FrameLayout.LayoutParams sl0 = (FrameLayout.LayoutParams) suggestScroll.getLayoutParams();
+        sl0.bottomMargin = 0;
+        suggestScroll.setLayoutParams(sl0);
+        if (islandMode()) {
+            bottomBarHidden = false;
+            backTop.setVisibility(View.GONE);
+            forwardTop.setVisibility(View.GONE);
+            homeTop.setVisibility(View.GONE);
+            newTabTop.setVisibility(View.GONE);
+            menuTop.setVisibility(View.GONE);
+            tabsTop.setVisibility(View.GONE);
+            fab.setVisibility(View.GONE);
+            content.addView(webArea, new LinearLayout.LayoutParams(-1, 0, 1));
+            FrameLayout.LayoutParams il = new FrameLayout.LayoutParams(-1, dp(56), Gravity.BOTTOM);
+            il.setMargins(dp(14), 0, dp(14), dp(12));
+            webArea.addView(island, il);
+            toolbar.setPadding(dp(6), dp(4), dp(6), dp(4));
+            FrameLayout.LayoutParams tl = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+            tl.setMargins(dp(10), 0, dp(10), dp(10));
+            webArea.addView(toolbar, tl);
+            toolbar.setVisibility(View.GONE);
+            FrameLayout.LayoutParams sl = (FrameLayout.LayoutParams) suggestScroll.getLayoutParams();
+            sl.gravity = Gravity.BOTTOM;
+            sl.bottomMargin = dp(74);
+            suggestScroll.setLayoutParams(sl);
+            styleIsland();
+            if (!prefs.getBoolean("island_hint_shown", false)) {
+                prefs.edit().putBoolean("island_hint_shown", true).apply();
+                ui.postDelayed(() -> toast("Tap the island to search · swipe ← → to switch tabs · swipe ↑ for all tabs"), 1500);
+            }
+            return;
+        }
         boolean fabOn = fabMode();
         boolean wide = wide();
         boolean bottom = addressBottom() && !wide;
@@ -1200,6 +1414,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         sl.gravity = bottom ? Gravity.BOTTOM : Gravity.TOP;
         suggestScroll.setLayoutParams(sl);
         if (fabOn) setupFab();
+        styleIsland();
     }
 
     private void setupFab() {
@@ -1278,6 +1493,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         pull.setShape(GradientDrawable.OVAL);
         pullIndicator.setBackground(pull);
         if (fabMode()) setupFab();
+        styleIsland();
         refreshShieldChrome();
     }
 
@@ -1570,6 +1786,10 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             if (t == current()) {
                 progress.setVisibility(p >= 100 ? View.GONE : View.VISIBLE);
                 if (Build.VERSION.SDK_INT >= 24) progress.setProgress(p, true); else progress.setProgress(p);
+                if (islandProgress != null) {
+                    islandProgress.setVisibility(p >= 100 ? View.INVISIBLE : View.VISIBLE);
+                    islandProgress.animate().scaleX(Math.max(0.05f, p / 100f)).setDuration(200).start();
+                }
             }
         }
 
@@ -1578,6 +1798,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             t.title = title;
             store.updateHistoryTitle(view.getUrl(), title);
             if (wide()) rebuildTabStrip();
+            if (t == current()) updateIsland();
         }
 
         @Override public void onReceivedIcon(WebView view, Bitmap icon) { t.favicon = icon; }
@@ -1962,6 +2183,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         forwardBtn.setAlpha(canFwd ? 1f : 0.35f);
         updateTabCount();
         refreshShieldChrome();
+        updateIsland();
     }
 
     private void updateAddress() {
@@ -1991,6 +2213,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         int n = t == null ? 0 : t.blocked();
         shieldBadge.setText(n > 99 ? "99+" : String.valueOf(n));
         shieldBadge.setVisibility(n > 0 && up ? View.VISIBLE : View.GONE);
+        updateIsland();
     }
 
     // ================================================================== suggestions
@@ -3081,7 +3304,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         }
         sectionTitle(body, "Start page");
         rowCard(body, "Wallpaper", wallpaperName(), () -> { d[0].dismiss(); chooseWallpaper(); });
-        rowCard(body, "Navigation style", fabMode() ? "Orbit button" : "Bottom toolbar", () -> { d[0].dismiss(); chooseNavStyle(); });
+        rowCard(body, "Navigation style", navStyleName(), () -> { d[0].dismiss(); chooseNavStyle(); });
         d[0] = sheet(body);
         d[0].show();
     }
@@ -3103,10 +3326,14 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     }
 
     private void chooseNavStyle() {
-        choose("Navigation style", new String[]{"Bottom toolbar", "Orbit button"}, fabMode() ? 1 : 0, w -> {
-            prefs.edit().putString("nav_style", w == 1 ? "fab" : "bar").apply();
+        final String[] ids = {"island", "bar", "fab"};
+        int checked = 0;
+        for (int i = 0; i < ids.length; i++) if (ids[i].equals(navStyle())) checked = i;
+        choose("Navigation style", new String[]{"ASTER Island", "Bottom toolbar", "Orbit button"}, checked, w -> {
+            prefs.edit().putString("nav_style", ids[w]).apply();
+            applyTheme();
             layoutChrome();
-            if (w == 1) toast("Tap the button for actions · swipe ← → for back/forward · swipe ↑ for tabs");
+            if (w == 2) toast("Tap the button for actions · swipe ← → for back/forward · swipe ↑ for tabs");
         });
     }
 
@@ -3118,7 +3345,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
         sectionTitle(b, "Appearance");
         rowCard(b, "Theme", theme.name, () -> { p.dismiss(); showThemes(); });
-        rowCard(b, "Navigation style", fabMode() ? "Orbit button" : "Bottom toolbar", () -> { p.dismiss(); chooseNavStyle(); });
+        rowCard(b, "Navigation style", navStyleName(), () -> { p.dismiss(); chooseNavStyle(); });
         rowCard(b, "Address bar position", addressBottom() ? "Bottom" : "Top", () -> {
             p.dismiss();
             choose("Address bar position", new String[]{"Top", "Bottom"}, addressBottom() ? 1 : 0, w -> {

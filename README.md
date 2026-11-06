@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Current Android version: **1.5.0**.
+Current Android version: **1.6.0**.
 
 ASTER is an original, privacy-first Android browser with a night-sky identity: built-in ad and tracker blocking (**ASTER Halo**), memory management (**ASTER Core**), a living start page with free games (**Arcade**), the **Orbit button** and a set of hand-made themes — including a full **Liquid Glass** look.
 
@@ -26,6 +26,9 @@ Live memory usage, **memory saver** (puts least-used tabs to sleep), open-tab ov
 
 ### 🕹 Arcade
 A gaming hub: Epic Games Store's free games of the week (and upcoming ones), giveaways for Steam, Xbox, PlayStation, GOG, mobile, Switch and DLC (GamerPower), and gaming news from GameSpot, PC Gamer, Xbox Wire, PlayStation Blog and Vandal. Optional **free game alerts** notify you when a new free game appears on the stores you follow.
+
+### 🏝 ASTER Island
+The whole interface in one small capsule at the bottom, within thumb reach: page title and site, Halo star with the blocked count, tab counter and menu, with the loading bar on its edge. Tap it to search, swipe it to switch tabs, swipe up for all tabs. It slides away while you read.
 
 ### 🧭 Browsing
 - **Integrated menu**: quick actions, current-page card with Halo status, in-place quick toggles and a tile grid. All panels open inside the browser and can be dragged down to close; pages slide in and close with back.

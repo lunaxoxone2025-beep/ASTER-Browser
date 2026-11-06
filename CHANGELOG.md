@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.0] - 2026-11-06
+ASTER Island.
+
+### Added
+- **ASTER Island** (new default on phones): the whole interface fits in one small capsule at the bottom — page title and site, a Halo star with the blocked count, tab counter and menu. The capsule edge doubles as the loading bar.
+  - Tap the island to search: it turns into a search card right above the keyboard, with suggestions above it.
+  - Swipe ← / → on the island to switch tabs, ↑ to see all tabs; long-press the tab counter for a new tab, the title to copy the link, the menu for forward.
+  - The island slides away while you read and returns when you scroll up.
+- Navigation style now offers ASTER Island, Bottom toolbar and Orbit button.
+
+### Changed
+- The start page uses a static wallpaper by default, so no animation runs in the background (animated ones are still available in Themes → Wallpaper).
+
 ## [1.5.0] - 2026-11-06
 Free game alerts and crash reports.
 
