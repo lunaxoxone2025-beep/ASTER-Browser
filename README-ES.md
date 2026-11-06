@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Versión Android actual: **1.0.0**, reconstruida desde cero.
+Versión Android actual: **1.1.0** (la 1.0 fue la reconstrucción completa; la 1.1 añade fluidez, interfaz en español, mejoras para YouTube y Microsoft Rewards).
 
 ASTER es un navegador para Android centrado en la privacidad y con estética gaming. La versión 1.0 reúne lo mejor de **Brave** (Shields, bloqueo integrado, estadísticas de privacidad) y de **Opera GX** (temas GX, Fast Action Button, GX Control, GX Corner) manteniendo una identidad propia.
 
@@ -25,7 +25,13 @@ ASTER es un navegador para Android centrado en la privacidad y con estética gam
 - **Sonidos y vibración GX** opcionales.
 - **Fondos animados**: Nebula, Synthwave, Aurora, Lluvia de código y Minimal.
 
+### 🎮 YouTube y Microsoft Rewards
+- **YouTube**: quita los datos de anuncios del reproductor, bloquea sus servidores de anuncios, pantalla completa con giro automático, **imagen en imagen** y reproducción en segundo plano opcional.
+- **Microsoft Rewards**: acceso directo a Rewards, cambio a Bing con un toque y la sesión de Microsoft se mantiene iniciada. Busca con Bing normalmente con tu cuenta iniciada para ganar puntos (automatizar búsquedas va contra las normas de Microsoft).
+
 ### 🧭 Navegación
+- **Interfaz en español o inglés** (automática según el idioma del móvil).
+- La barra **se oculta al hacer scroll**; **desliza sobre la barra de direcciones** para cambiar de pestaña; en tablets y plegables hay **barra de pestañas**.
 - Hasta 100 pestañas con **pestañas dormidas**, selector visual con miniaturas y deslizar para cerrar.
 - Barra de direcciones con **sugerencias**, coincidencias de historial y marcadores y «pegar e ir»; puede ir **arriba o abajo**.
 - **Vídeo a pantalla completa**, **menú al mantener pulsado** enlaces e imágenes, abrir en pestaña nueva, en segundo plano o privada.

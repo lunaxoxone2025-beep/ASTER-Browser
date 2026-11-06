@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.0] - 2026-11-06
+Smoothness, comfort, YouTube and Microsoft Rewards.
+
+### Added
+- Spanish interface (automatic by device language, or choose Español/English in Settings → Language).
+- Bottom toolbar hides while scrolling down and returns when scrolling up.
+- Swipe left/right on the address bar to switch tabs.
+- Tablet / foldable / large-window layout: desktop-style tab strip plus back, forward, home, new tab and menu in the toolbar.
+- Picture-in-picture for full-screen videos (automatic on Android 12+).
+- YouTube ad removal (experimental): strips ad data from player responses and blocks YouTube ad endpoints.
+- Microsoft Rewards: Rewards shortcut on the start page and in the menu, one-time offer to switch to Bing, Microsoft sign-in domains keep third-party cookies so you stay signed in.
+- Per-site "Allow third-party cookies" Shields toggle for sites whose sign-in needs it.
+
+### Improved
+- Smoother scrolling: the visible tab is pre-rastered and background tabs get lower renderer priority.
+- Start page is no longer rebuilt every time you switch to it.
+
 ## [1.0.0] - 2026-11-06
 Complete rebuild of ASTER as a modular browser inspired by Brave and Opera GX.
 

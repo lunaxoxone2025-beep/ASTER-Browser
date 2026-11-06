@@ -28,6 +28,7 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden|keyboard|screenLayout|uiMode|density|navigation"
             android:exported="true"
             android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -59,6 +60,7 @@
             android:launchMode="singleTask"
             android:taskAffinity="com.aster.browser.private"
             android:excludeFromRecents="false"
+            android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden|keyboard|screenLayout|uiMode|density|navigation"
             android:windowSoftInputMode="adjustResize" />
     </application>

@@ -85,6 +85,7 @@ final class Store {
 
     private void addDefaultDial() {
         String[][] defaults = {
+            {"Rewards", "https://rewards.bing.com"},
             {"YouTube", "https://m.youtube.com"},
             {"Twitch", "https://m.twitch.tv"},
             {"Discord", "https://discord.com/app"},
@@ -188,6 +189,15 @@ final class Store {
     // ---------------------------------------------------------------- speed dial
 
     void saveSpeedDial() { saveList("speeddial.json", speedDial); }
+
+    /** Adds a shortcut at the given position unless one for the same site already exists. */
+    boolean ensureDial(int position, String title, String url) {
+        String host = hostOf(url);
+        for (Entry e : speedDial) if (hostOf(e.url).equals(host)) return false;
+        speedDial.add(Math.max(0, Math.min(position, speedDial.size())), new Entry(title, url, 0L));
+        saveSpeedDial();
+        return true;
+    }
 
     // ---------------------------------------------------------------- downloads
 

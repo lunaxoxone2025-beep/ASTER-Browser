@@ -94,8 +94,8 @@ final class StartPage {
         String muted = Theme.css(t.muted);
 
         StringBuilder h = new StringBuilder(16000);
-        h.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover'>")
-            .append("<meta name='color-scheme' content='dark'><title>").append(incognito ? "Private tab" : "New tab").append("</title><style>")
+        h.append("<!doctype html><html lang='").append(I18n.es ? "es" : "en").append("'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover'>")
+            .append("<meta name='color-scheme' content='dark'><title>").append(I18n.t(incognito ? "Private tab" : "New tab")).append("</title><style>")
             .append(":root{--a:").append(accent).append(";--a2:").append(accent2).append(";--bg:").append(bg)
             .append(";--s:").append(surface).append(";--b:").append(border).append(";--t:").append(text).append(";--m:").append(muted).append("}")
             .append("*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--t);font-family:system-ui,-apple-system,Roboto,Arial,sans-serif}")
@@ -129,17 +129,17 @@ final class StartPage {
 
         if (incognito) {
             h.append("<div class='brand'><div class='logo'>&#128065;</div><div class='n'>PRIVATE</div></div>");
-            h.append(searchForm(engine, "Search privately"));
-            h.append("<div class='priv'><b>You are in a private window.</b><br>ASTER won't save your history, session or site data from this window. ")
-                .append("Cookies and storage live in a separate, isolated profile and are wiped when you close it. ")
-                .append("Shields still block ads and trackers.<br><br>Your internet provider, employer or the sites you visit can still see your activity.</div>");
+            h.append(searchForm(engine, I18n.t("Search privately")));
+            h.append("<div class='priv'><b>").append(esc(I18n.t("You are in a private window."))).append("</b><br>")
+                .append(esc(I18n.t("ASTER won't save your history, session or site data from this window. Cookies and storage live in a separate, isolated profile and are wiped when you close it. Shields still block ads and trackers.")))
+                .append("<br><br>").append(esc(I18n.t("Your internet provider, employer or the sites you visit can still see your activity."))).append("</div>");
         } else {
             if (prefs.getBoolean("home_show_stats", true)) {
                 long blocked = shields.totalBlocked();
                 h.append("<section class='stats'>")
-                    .append("<div class='stat'><b>").append(formatCount(blocked)).append("</b><span>Ads &amp; trackers</span></div>")
-                    .append("<div class='stat'><b>").append(formatBytes(blocked * ShieldEngine.BYTES_PER_BLOCK)).append("</b><span>Data saved</span></div>")
-                    .append("<div class='stat'><b>").append(formatTime(blocked * ShieldEngine.MS_PER_BLOCK)).append("</b><span>Time saved</span></div>")
+                    .append("<div class='stat'><b>").append(formatCount(blocked)).append("</b><span>").append(esc(I18n.t("Ads & trackers"))).append("</span></div>")
+                    .append("<div class='stat'><b>").append(formatBytes(blocked * ShieldEngine.BYTES_PER_BLOCK)).append("</b><span>").append(esc(I18n.t("Data saved"))).append("</span></div>")
+                    .append("<div class='stat'><b>").append(formatTime(blocked * ShieldEngine.MS_PER_BLOCK)).append("</b><span>").append(esc(I18n.t("Time saved"))).append("</span></div>")
                     .append("</section>");
             }
             if (prefs.getBoolean("home_show_clock", true)) {
@@ -147,10 +147,10 @@ final class StartPage {
             } else if (prefs.getBoolean("home_show_branding", true)) {
                 h.append("<div class='brand'><div class='logo'>&#10022;</div><div class='n'>ASTER</div></div>");
             }
-            h.append(searchForm(engine, engineName(engine) + " · search or type URL"));
+            h.append(searchForm(engine, I18n.t("Search or type URL")));
 
             if (prefs.getBoolean("home_show_shortcuts", true)) {
-                h.append("<h3><span>Speed dial</span><a href='aster://dial/manage'>EDIT</a></h3><div class='dial'>");
+                h.append("<h3><span>").append(esc(I18n.t("Speed dial"))).append("</span><a href='aster://dial/manage'>").append(esc(I18n.t("EDIT"))).append("</a></h3><div class='dial'>");
                 for (int i = 0; i < store.speedDial.size(); i++) {
                     Store.Entry e = store.speedDial.get(i);
                     String host = Store.hostOf(e.url);
@@ -160,11 +160,11 @@ final class StartPage {
                         .append("<img src='https://icons.duckduckgo.com/ip3/").append(esc(host)).append(".ico' loading='lazy' onerror='this.remove()'>")
                         .append("</div><div class='lbl'>").append(esc(e.label())).append("</div></a>");
                 }
-                h.append("<a class='tile add' href='aster://dial/add'><div class='ic'>+</div><div class='lbl'>Add</div></a></div>");
+                h.append("<a class='tile add' href='aster://dial/add'><div class='ic'>+</div><div class='lbl'>").append(esc(I18n.t("Add"))).append("</div></a></div>");
             }
 
             if (prefs.getBoolean("home_show_bookmarks", true) && !store.bookmarks.isEmpty()) {
-                h.append("<h3><span>Bookmarks</span><a href='aster://bookmarks'>ALL</a></h3><div class='list'>");
+                h.append("<h3><span>").append(esc(I18n.t("Bookmarks"))).append("</span><a href='aster://bookmarks'>").append(esc(I18n.t("ALL"))).append("</a></h3><div class='list'>");
                 int n = 0;
                 for (Store.Entry e : store.bookmarks) {
                     if (n++ >= 5) break;
@@ -174,10 +174,10 @@ final class StartPage {
             }
 
             if (prefs.getBoolean("home_show_gx_corner", true)) {
-                h.append("<h3><span>GX Corner &middot; Free games</span><a href='aster://gxcorner/refresh'>REFRESH</a></h3>");
+                h.append("<h3><span>GX Corner &middot; ").append(esc(I18n.t("Free games"))).append("</span><a href='aster://gxcorner/refresh'>").append(esc(I18n.t("REFRESH"))).append("</a></h3>");
                 h.append(gxCorner(gxCornerJson));
             }
-            h.append("<div class='foot'><a href='aster://customize'>&#9881; CUSTOMIZE</a><a href='aster://shields'>&#9960; SHIELDS</a></div>");
+            h.append("<div class='foot'><a href='aster://customize'>&#9881; ").append(esc(I18n.t("CUSTOMIZE"))).append("</a><a href='aster://shields'>&#9960; SHIELDS</a></div>");
         }
 
         h.append("</main><script>")
@@ -187,8 +187,9 @@ final class StartPage {
             .append("if(/^[^\\s]+\\.[a-z]{2,}(\\/\\S*)?$/i.test(v)){location.href='https://'+v;return false;}")
             .append("location.href=E.replace('%s',encodeURIComponent(v));return false;}")
             .append("(function(){var c=document.getElementById('clk'),d=document.getElementById('dt');if(!c)return;")
-            .append("function u(){var n=new Date();c.textContent=n.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});")
-            .append("d.textContent=n.toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'});}u();setInterval(u,10000);})();")
+            .append("var L=").append(I18n.es ? "'es'" : "[]").append(";")
+            .append("function u(){var n=new Date();c.textContent=n.toLocaleTimeString(L, {hour:'2-digit',minute:'2-digit'});")
+            .append("d.textContent=n.toLocaleDateString(L, {weekday:'long',day:'numeric',month:'long'});}u();setInterval(u,10000);})();")
             .append(wallpaperJs(wallpaper, t))
             .append("</script></body></html>");
         return h.toString();
@@ -202,7 +203,7 @@ final class StartPage {
     }
 
     private static String gxCorner(String json) {
-        if (json == null || json.isEmpty()) return "<div class='empty'>Loading free games from GamerPower&hellip; tap Refresh if nothing appears.</div>";
+        if (json == null || json.isEmpty()) return "<div class='empty'>" + esc(I18n.t("Loading free games from GamerPower… tap Refresh if nothing appears.")) + "</div>";
         StringBuilder h = new StringBuilder("<div class='gx'>");
         int count = 0;
         try {
@@ -218,13 +219,13 @@ final class StartPage {
                 if (platform.length() > 28) platform = platform.substring(0, 28) + "…";
                 h.append("<a class='game' href='").append(esc(url)).append("'>");
                 if (img.startsWith("https://")) h.append("<img loading='lazy' src='").append(esc(img)).append("'>");
-                h.append("<div><b>").append(esc(g.optString("title", "Free game"))).append("</b><span>")
-                    .append("N/A".equals(worth) || worth.isEmpty() ? "FREE" : "FREE &middot; was " + esc(worth))
+                h.append("<div><b>").append(esc(g.optString("title", I18n.t("Free game")))).append("</b><span>")
+                    .append("N/A".equals(worth) || worth.isEmpty() ? esc(I18n.t("FREE")) : esc(I18n.f("FREE · was %s", worth)))
                     .append(" &middot; ").append(esc(platform)).append("</span></div></a>");
                 count++;
             }
         } catch (Exception ignored) { }
-        if (count == 0) return "<div class='empty'>No free games right now. Check back later.</div>";
+        if (count == 0) return "<div class='empty'>" + esc(I18n.t("No free games right now. Check back later.")) + "</div>";
         return h.append("</div>").toString();
     }
 
@@ -232,6 +233,7 @@ final class StartPage {
 
     static final String[] WALLPAPER_IDS = {"nebula", "synthwave", "aurora", "matrix", "minimal"};
     static final String[] WALLPAPER_NAMES = {"Nebula (animated stars)", "Synthwave grid (animated)", "Aurora (animated)", "Code rain (animated)", "Minimal gradient"};
+    static String wallpaperLabel(int i) { return I18n.t(WALLPAPER_NAMES[i]); }
 
     private static String wallpaperCss(String w, Theme t) {
         String a = Theme.cssA(t.accent, 0.35f);

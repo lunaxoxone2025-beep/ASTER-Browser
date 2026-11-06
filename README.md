@@ -1,6 +1,6 @@
 # ASTER Browser
 
-Current Android version: **1.0.0** — a full rebuild.
+Current Android version: **1.1.0** (1.0 was a full rebuild; 1.1 adds smoothness, Spanish UI, YouTube and Microsoft Rewards improvements).
 
 ASTER is a privacy-first Android browser with a gaming-style interface. Version 1.0 combines the ideas people love in **Brave** (Shields, built-in blocking, privacy stats) and **Opera GX** (GX themes, Fast Action Button, GX Control, GX Corner) with its own identity.
 
@@ -26,7 +26,13 @@ ASTER is a privacy-first Android browser with a gaming-style interface. Version 
 - **GX sounds & haptics**: synthesized interface sounds and light vibration (both optional).
 - **Animated start-page wallpapers**: Nebula, Synthwave grid, Aurora, Code rain, Minimal.
 
+### 🎮 YouTube & Microsoft Rewards
+- **YouTube**: ad data stripped from the player, ad endpoints blocked, full-screen with auto-landscape, **picture-in-picture** and optional background playback.
+- **Microsoft Rewards**: Rewards shortcut, one-tap switch to Bing, Microsoft sign-in stays logged in. Search normally with Bing while signed in to earn points (automating searches breaks Microsoft's rules).
+
 ### 🧭 Browsing
+- **Spanish or English interface** (automatic by device language).
+- Toolbar **hides while scrolling**; **swipe on the address bar** to switch tabs; tablet/foldable layout with a **tab strip**.
 - Up to 100 tabs with **tab sleeping**, visual **tab switcher** with thumbnails and swipe-to-close.
 - Address bar with **search suggestions**, history/bookmark matches and "paste and go"; can sit at the **top or bottom**.
 - **Full-screen video** (with auto-landscape), **long-press menus** for links and images, open links in new / background / private tabs.
@@ -60,6 +66,7 @@ ASTER checks GitHub Releases and can download the new APK for Android's installe
 | `FabMenu.java` | GX Fast Action Button |
 | `AsterWebView.java`, `Tab.java` | WebView subclass (pull-to-refresh, scroll) and tab model |
 | `Theme.java`, `GxSounds.java`, `Updater.java` | Themes, interface sounds, GitHub updater |
+| `I18n.java` | Spanish/English interface strings |
 
 ## Build
 

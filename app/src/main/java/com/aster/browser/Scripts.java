@@ -40,6 +40,23 @@ final class Scripts {
             + "}catch(e){}})();";
     }
 
+    /**
+     * Runs as early as possible on YouTube: strips ad descriptors from player responses
+     * (the same idea as uBlock Origin's json-prune for adPlacements/playerAds).
+     */
+    static String youtubeEarly() {
+        return "(function(){try{if(window.__asterYtE)return;window.__asterYtE=1;"
+            + "var K=['adPlacements','playerAds','adSlots','adBreakHeartbeatParams'];"
+            + "function prune(o){try{if(o&&typeof o==='object'){for(var i=0;i<K.length;i++){if(K[i] in o)delete o[K[i]];}"
+            + "if(o.playerResponse&&typeof o.playerResponse==='object')prune(o.playerResponse);"
+            + "if(o.response&&typeof o.response==='object'&&o.response.playerResponse)prune(o.response.playerResponse);}}catch(e){}return o;}"
+            + "var jp=JSON.parse;JSON.parse=function(){return prune(jp.apply(this,arguments));};"
+            + "if(window.Response&&Response.prototype.json){var rj=Response.prototype.json;Response.prototype.json=function(){return rj.apply(this,arguments).then(prune);};}"
+            + "var cur=window.ytInitialPlayerResponse;if(cur)prune(cur);"
+            + "try{Object.defineProperty(window,'ytInitialPlayerResponse',{configurable:true,get:function(){return cur;},set:function(v){cur=prune(v);}});}catch(e){}"
+            + "}catch(e){}})();";
+    }
+
     /** Fingerprinting farbling: small noise on canvas/audio, generic hardware values and GPC. */
     static String fingerprint(int seed) {
         return "(function(){try{if(window.__asterFp)return;window.__asterFp=1;var seed=" + seed + ";"

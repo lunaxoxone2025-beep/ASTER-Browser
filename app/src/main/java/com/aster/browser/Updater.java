@@ -97,7 +97,7 @@ final class Updater {
                         }
                     }
                     if (apk == null || !apk.startsWith("https://") || compare(tag, BuildConfig.VERSION_NAME) <= 0) {
-                        if (force) toast("ASTER " + BuildConfig.VERSION_NAME + " is up to date");
+                        if (force) toast(I18n.f("ASTER %s is up to date", BuildConfig.VERSION_NAME));
                         return;
                     }
                     final String url = apk;
@@ -115,7 +115,7 @@ final class Updater {
 
     private void toast(final String msg) {
         activity.runOnUiThread(new Runnable() {
-            @Override public void run() { Toast.makeText(activity, msg, Toast.LENGTH_SHORT).show(); }
+            @Override public void run() { Toast.makeText(activity, I18n.t(msg), Toast.LENGTH_SHORT).show(); }
         });
     }
 
@@ -136,8 +136,8 @@ final class Updater {
 
     private void offer(String version, final String url) {
         if (activity.isFinishing()) return;
-        new AlertDialog.Builder(activity)
-            .setTitle("ASTER " + version + " is available")
+        new I18n.Builder(activity)
+            .setTitle(I18n.f("ASTER %s is available", version))
             .setMessage("A newer version of ASTER Browser is ready. Download it now? Android will ask you to confirm the installation.")
             .setNegativeButton("Later", null)
             .setPositiveButton("Download", (d, w) -> download(url))
@@ -154,9 +154,9 @@ final class Updater {
             r.setDestinationInExternalFilesDir(activity, Environment.DIRECTORY_DOWNLOADS, APK_NAME);
             long id = dm.enqueue(r);
             prefs.edit().putLong("update_download_id", id).apply();
-            Toast.makeText(activity, "Downloading ASTER update…", Toast.LENGTH_LONG).show();
+            Toast.makeText(activity, I18n.t("Downloading ASTER update…"), Toast.LENGTH_LONG).show();
         } catch (Exception e) {
-            Toast.makeText(activity, "Could not download update", Toast.LENGTH_LONG).show();
+            Toast.makeText(activity, I18n.t("Could not download update"), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -175,7 +175,7 @@ final class Updater {
         Uri apk = dm.getUriForDownloadedFile(id);
         if (apk == null) return;
         if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
-            new AlertDialog.Builder(activity)
+            new I18n.Builder(activity)
                 .setTitle("Allow ASTER updates")
                 .setMessage("Allow ASTER Browser to install apps, then come back to finish the update.")
                 .setNegativeButton("Later", null)
@@ -192,7 +192,7 @@ final class Updater {
             install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
             activity.startActivity(install);
         } catch (Exception e) {
-            Toast.makeText(activity, "Android could not open the installer", Toast.LENGTH_LONG).show();
+            Toast.makeText(activity, I18n.t("Android could not open the installer"), Toast.LENGTH_LONG).show();
         }
     }
 }

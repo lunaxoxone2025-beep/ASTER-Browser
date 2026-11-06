@@ -19,6 +19,7 @@ final class Tab {
     boolean start;
     boolean reader;
     boolean readerPending;
+    long startBuiltAt;
     boolean desktop;
     Bitmap favicon;
     boolean loading;

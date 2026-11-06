@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.app.PictureInPictureParams;
 import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
@@ -40,6 +41,8 @@ import android.os.Message;
 import android.speech.RecognizerIntent;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Rational;
+import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
@@ -67,6 +70,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -108,6 +112,9 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private static final int REQ_DOWNLOAD_PERM = 701;
     private static final int REQ_MEDIA_PERM = 8201;
     private static final int REQ_LOCATION_PERM = 8202;
+    static final String REWARDS_URL = "https://rewards.bing.com";
+    private static final String[] MICROSOFT_DOMAINS = {"bing.com", "live.com", "microsoft.com", "microsoftonline.com",
+        "xbox.com", "msn.com", "office.com", "live.net", "msftauth.net", "msauth.net", "gfx.ms", "microsoftrewards.com"};
     private static final String GX_CORNER_API = "https://www.gamerpower.com/api/giveaways?type=game&sort-by=popularity";
 
     // ------------------------------------------------------------------ state
@@ -137,6 +144,11 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private TextView forwardBtn;
     private TextView newTabBtn;
     private TextView menuBtn;
+    private TextView backTop, forwardTop, homeTop, newTabTop, menuTop;
+    private HorizontalScrollView tabStripScroll;
+    private LinearLayout tabStrip;
+    private boolean bottomBarHidden;
+    private boolean resumed;
     private ProgressBar progress;
     private ScrollView suggestScroll;
     private LinearLayout suggestBox;
@@ -170,8 +182,9 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         super.onCreate(state);
         incognito = isPrivateWindow();
         prefs = incognito ? privatePrefs() : getSharedPreferences("aster", MODE_PRIVATE);
+        I18n.init(prefs.getString("language", "auto"));
         if (incognito && Build.VERSION.SDK_INT < 28) {
-            new AlertDialog.Builder(this).setTitle("Private browsing unavailable")
+            new I18n.Builder(this).setTitle("Private browsing unavailable")
                 .setMessage("An isolated private profile requires Android 9 or newer.")
                 .setPositiveButton("Close", (d, w) -> finish()).setCancelable(false).show();
             return;
@@ -194,7 +207,55 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             updater.check(false);
             if (shields.needsUpdate()) shields.updateAsync((ok, rules) -> ui.post(this::refreshShieldChrome));
             refreshGxCorner(false);
+            setupRewardsOnce();
         }
+    }
+
+    /** One-time Microsoft Rewards setup: shortcut on the start page and an offer to switch to Bing. */
+    private void setupRewardsOnce() {
+        if (!prefs.getBoolean("rewards_dial_added", false)) {
+            if (store.ensureDial(0, "Rewards", REWARDS_URL)) refreshStartPages();
+            prefs.edit().putBoolean("rewards_dial_added", true).apply();
+        }
+        if (prefs.getBoolean("rewards_prompt_done", false) || "bing".equals(prefs.getString("search_engine", "brave"))) return;
+        prefs.edit().putBoolean("rewards_prompt_done", true).apply();
+        ui.postDelayed(() -> {
+            if (isFinishing()) return;
+            new I18n.Builder(this).setTitle("Earn Microsoft Rewards points?")
+                .setMessage("Searches made with Bing while you're signed in to your Microsoft account earn Rewards points you can redeem for Xbox gift cards and Game Pass. Use Bing as ASTER's search engine?\n\nYou can change this any time in Settings → Search engine.")
+                .setNegativeButton("No thanks", null)
+                .setPositiveButton("Use Bing", (d, w) -> {
+                    prefs.edit().putString("search_engine", "bing").apply();
+                    refreshStartPages();
+                    toast("Bing is now your search engine");
+                }).show();
+        }, 1200);
+    }
+
+    void openRewards() {
+        Tab t = current();
+        if (t != null && t.start) load(t, REWARDS_URL); else openInNewTab(REWARDS_URL, false);
+    }
+
+    /**
+     * Microsoft sign-in (Bing, Rewards, Xbox, Outlook) shares cookies between its own domains,
+     * so those sites keep working with third-party cookies allowed. Other sites follow Shields.
+     */
+    boolean allowThirdPartyCookies(String host) {
+        String h = ShieldEngine.normalize(host);
+        if (h == null) return false;
+        for (String d : MICROSOFT_DOMAINS) if (h.equals(d) || h.endsWith("." + d)) return true;
+        return shields.siteFlag(h, "cookies3p", false) || !shields.shieldsUp(h);
+    }
+
+    private void applyCookiePolicy(WebView view, String url) {
+        try {
+            CookieManager.getInstance().setAcceptThirdPartyCookies(view, allowThirdPartyCookies(Uri.parse(url).getHost()));
+        } catch (Exception ignored) { }
+    }
+
+    static boolean isYoutube(String host) {
+        return host != null && (host.equals("youtube.com") || host.endsWith(".youtube.com") || host.endsWith("youtube-nocookie.com"));
     }
 
     /**
@@ -259,7 +320,8 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         shields.persistStats();
         store.flush();
         saveSession();
-        boolean bg = prefs.getBoolean("background_play", false);
+        resumed = false;
+        boolean bg = prefs.getBoolean("background_play", false) || inPip();
         for (Tab t : tabs) {
             if (t.web == null) continue;
             if (bg && tabs.indexOf(t) == active) continue;
@@ -270,6 +332,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     @Override protected void onResume() {
         super.onResume();
         if (shields == null) return;
+        resumed = true;
         Tab t = current();
         if (t != null && t.web != null) t.web.onResume();
         if (updater != null) {
@@ -354,7 +417,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
     TextView text(String s, float sp, int color) {
         TextView t = new TextView(this);
-        t.setText(s);
+        t.setText(I18n.t(s));
         t.setTextSize(sp);
         t.setTextColor(color);
         return t;
@@ -369,7 +432,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private TextView chromeButton(String icon, float sp, String description) {
         TextView v = text(icon, sp, theme.text);
         v.setGravity(Gravity.CENTER);
-        v.setContentDescription(description);
+        v.setContentDescription(I18n.t(description));
         v.setClickable(true);
         v.setFocusable(true);
         return v;
@@ -387,7 +450,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         if (sounds != null) sounds.click();
     }
 
-    private void toast(String s) { Toast.makeText(this, s, Toast.LENGTH_SHORT).show(); }
+    private void toast(String s) { Toast.makeText(this, I18n.t(s), Toast.LENGTH_SHORT).show(); }
 
     private void applyInsets(View v) {
         if (Build.VERSION.SDK_INT < 35) return;
@@ -504,7 +567,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     }
 
     TextView sectionTitle(LinearLayout parent, String title) {
-        TextView s = bold(title.toUpperCase(Locale.ROOT), 11, theme.accent);
+        TextView s = bold(I18n.t(title).toUpperCase(), 11, theme.accent);
         s.setLetterSpacing(0.12f);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = dp(18);
@@ -552,7 +615,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     }
 
     void choose(String title, final String[] labels, int checked, final ChoiceListener listener) {
-        new AlertDialog.Builder(this).setTitle(title)
+        new I18n.Builder(this).setTitle(title)
             .setSingleChoiceItems(labels, checked, (d, which) -> {
                 d.dismiss();
                 listener.onChoice(which);
@@ -564,7 +627,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private EditText input(String hint, String value) {
         EditText e = new EditText(this);
         e.setSingleLine(true);
-        e.setHint(hint);
+        e.setHint(I18n.t(hint));
         e.setText(value == null ? "" : value);
         e.setTextColor(theme.text);
         e.setHintTextColor(theme.muted);
@@ -585,6 +648,19 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
 
+        // Desktop-style controls, only shown on tablets / unfolded foldables / large windows.
+        backTop = chromeButton("‹", 28, "Back");
+        forwardTop = chromeButton("›", 28, "Forward");
+        homeTop = chromeButton("⌂", 20, "Home");
+        onTap(backTop, this::goBack);
+        onTap(forwardTop, this::goForward);
+        onTap(homeTop, () -> { Tab t = current(); if (t != null) loadStart(t); });
+        toolbar.addView(backTop, new LinearLayout.LayoutParams(dp(42), dp(44)));
+        toolbar.addView(forwardTop, new LinearLayout.LayoutParams(dp(42), dp(44)));
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(dp(42), dp(44));
+        hp.rightMargin = dp(4);
+        toolbar.addView(homeTop, hp);
+
         FrameLayout shieldFrame = new FrameLayout(this);
         shieldIcon = chromeButton("⛨", 19, "ASTER Shields");
         shieldFrame.addView(shieldIcon, new FrameLayout.LayoutParams(-1, -1));
@@ -604,7 +680,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         address = new EditText(this);
         address.setSingleLine(true);
         address.setTextSize(15);
-        address.setHint(incognito ? "Search privately" : "Search or type URL");
+        address.setHint(I18n.t(incognito ? "Search privately" : "Search or type URL"));
         address.setPadding(dp(16), 0, dp(12), 0);
         address.setImeOptions(EditorInfo.IME_ACTION_GO | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         address.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
@@ -652,6 +728,33 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(dp(40), dp(40));
         tp.leftMargin = dp(4);
         toolbar.addView(tabsTop, tp);
+
+        newTabTop = chromeButton("+", 24, "New tab");
+        onTap(newTabTop, () -> openInNewTab(null, false));
+        toolbar.addView(newTabTop, new LinearLayout.LayoutParams(dp(42), dp(44)));
+        menuTop = chromeButton("⋮", 22, "Menu");
+        onTap(menuTop, this::showMenu);
+        toolbar.addView(menuTop, new LinearLayout.LayoutParams(dp(40), dp(44)));
+
+        // Swipe left/right on the address bar to switch tabs (like Chrome and Opera).
+        final GestureDetector swipe = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
+                if (e1 == null || e2 == null || address.hasFocus() || tabs.size() < 2) return false;
+                float dx = e2.getX() - e1.getX();
+                float dy = e2.getY() - e1.getY();
+                if (Math.abs(dx) < dp(50) || Math.abs(dx) < Math.abs(dy) * 2) return false;
+                switchTabBySwipe(dx < 0 ? 1 : -1);
+                return true;
+            }
+        });
+        address.setOnTouchListener((v, e) -> !address.hasFocus() && swipe.onTouchEvent(e));
+
+        tabStripScroll = new HorizontalScrollView(this);
+        tabStripScroll.setHorizontalScrollBarEnabled(false);
+        tabStrip = new LinearLayout(this);
+        tabStrip.setGravity(Gravity.CENTER_VERTICAL);
+        tabStrip.setPadding(dp(10), dp(2), dp(10), dp(6));
+        tabStripScroll.addView(tabStrip);
 
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progress.setMax(100);
@@ -711,7 +814,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         findBar.setElevation(dp(10));
         findInput = new EditText(this);
         findInput.setSingleLine(true);
-        findInput.setHint("Find in page");
+        findInput.setHint(I18n.t("Find in page"));
         findInput.setTextSize(14);
         findInput.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
         findBar.addView(findInput, new LinearLayout.LayoutParams(0, dp(42), 1));
@@ -746,20 +849,96 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     }
 
     private boolean fabMode() { return "fab".equals(prefs.getString("nav_style", "bar")); }
+    /** Tablets, unfolded foldables, Chromebooks and large split-screen windows. */
+    private boolean wide() { return getResources().getConfiguration().screenWidthDp >= 600; }
+
+    /** Desktop-style tab strip for wide screens. */
+    private void rebuildTabStrip() {
+        if (tabStrip == null || !wide()) return;
+        tabStrip.removeAllViews();
+        View activeChip = null;
+        for (int i = 0; i < tabs.size(); i++) {
+            final Tab t = tabs.get(i);
+            final int index = i;
+            boolean isActive = i == active;
+            LinearLayout chip = new LinearLayout(this);
+            chip.setGravity(Gravity.CENTER_VERTICAL);
+            chip.setPadding(dp(12), 0, dp(2), 0);
+            chip.setBackground(pressable(isActive ? Theme.withAlpha(theme.accent, 60) : theme.surface, 12,
+                isActive ? Theme.withAlpha(theme.accent, 160) : 0));
+            TextView title = text((t.sleeping() && !t.start ? "💤 " : "") + t.displayTitle(), 12, isActive ? theme.text : theme.muted);
+            title.setSingleLine(true);
+            title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            title.setMaxWidth(dp(170));
+            chip.addView(title);
+            TextView x = chromeButton("✕", 12, "Close tab");
+            x.setTextColor(theme.muted);
+            chip.addView(x, new LinearLayout.LayoutParams(dp(30), dp(34)));
+            x.setOnClickListener(v -> { feedback(v); closeTab(index); });
+            chip.setOnClickListener(v -> { feedback(v); select(index); });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(34));
+            lp.rightMargin = dp(6);
+            tabStrip.addView(chip, lp);
+            if (isActive) activeChip = chip;
+        }
+        TextView plus = chromeButton("+", 20, "New tab");
+        plus.setTextColor(theme.accent);
+        onTap(plus, () -> openInNewTab(null, false));
+        tabStrip.addView(plus, new LinearLayout.LayoutParams(dp(40), dp(34)));
+        final View target = activeChip;
+        if (target != null) tabStripScroll.post(() -> tabStripScroll.smoothScrollTo(Math.max(0, target.getLeft() - dp(60)), 0));
+    }
+
+    /** Switches tab with a short slide animation (address-bar swipe). */
+    private void switchTabBySwipe(int direction) {
+        if (tabs.size() < 2) return;
+        int next = (active + direction + tabs.size()) % tabs.size();
+        feedback(address);
+        select(next);
+        Tab t = current();
+        if (t != null && t.web != null) {
+            t.web.setTranslationX(direction * webArea.getWidth() * 0.25f);
+            t.web.setAlpha(0.4f);
+            t.web.animate().translationX(0).alpha(1f).setDuration(180).start();
+        }
+    }
+
+    /** Auto-hides the bottom toolbar while reading so pages get the full screen. */
+    private void setBottomBarHidden(boolean hide) {
+        if (bottomBarHidden == hide || bottomBar.getParent() == null) return;
+        bottomBarHidden = hide;
+        if (hide) {
+            bottomBar.animate().translationY(bottomBar.getHeight()).setDuration(150)
+                .withEndAction(() -> { if (bottomBarHidden) bottomBar.setVisibility(View.GONE); }).start();
+        } else {
+            bottomBar.setVisibility(View.VISIBLE);
+            bottomBar.animate().translationY(0).setDuration(150).start();
+        }
+    }
     private boolean addressBottom() { return "bottom".equals(prefs.getString("address_position", "top")); }
 
     /** Places toolbar / bottom bar according to navigation preferences and screen width. */
     private void layoutChrome() {
         content.removeAllViews();
         boolean fabOn = fabMode();
-        boolean bottom = addressBottom();
-        boolean wide = getResources().getConfiguration().screenWidthDp >= 600;
-        int side = dp(wide ? 18 : 8);
-        toolbar.setPadding(side, dp(7), side, dp(7));
-        bottomBar.setPadding(dp(wide ? 60 : 4), dp(4), dp(wide ? 60 : 4), dp(6));
-        tabsTop.setVisibility(fabOn || wide ? View.VISIBLE : View.GONE);
+        boolean wide = wide();
+        boolean bottom = addressBottom() && !wide;
+        int side = dp(wide ? 14 : 8);
+        toolbar.setPadding(side, dp(6), side, dp(6));
+        bottomBar.setPadding(dp(4), dp(4), dp(4), dp(6));
+        int desk = wide ? View.VISIBLE : View.GONE;
+        backTop.setVisibility(desk);
+        forwardTop.setVisibility(desk);
+        homeTop.setVisibility(desk);
+        newTabTop.setVisibility(desk);
+        menuTop.setVisibility(wide || fabOn ? View.VISIBLE : View.GONE);
+        tabsTop.setVisibility(fabOn && !wide ? View.VISIBLE : View.GONE);
+        bottomBarHidden = false;
+        bottomBar.setTranslationY(0);
+        bottomBar.setVisibility(View.VISIBLE);
         if (!bottom) {
             content.addView(toolbar, new LinearLayout.LayoutParams(-1, -2));
+            if (wide) content.addView(tabStripScroll, new LinearLayout.LayoutParams(-1, -2));
             content.addView(progress, new LinearLayout.LayoutParams(-1, dp(2)));
             content.addView(webArea, new LinearLayout.LayoutParams(-1, 0, 1));
         } else {
@@ -767,7 +946,8 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             content.addView(progress, new LinearLayout.LayoutParams(-1, dp(2)));
             content.addView(toolbar, new LinearLayout.LayoutParams(-1, -2));
         }
-        if (!fabOn) content.addView(bottomBar, new LinearLayout.LayoutParams(-1, -2));
+        if (!fabOn && !wide) content.addView(bottomBar, new LinearLayout.LayoutParams(-1, -2));
+        if (wide) rebuildTabStrip();
         fab.setVisibility(fabOn ? View.VISIBLE : View.GONE);
         FrameLayout.LayoutParams sl = (FrameLayout.LayoutParams) suggestScroll.getLayoutParams();
         sl.gravity = bottom ? Gravity.BOTTOM : Gravity.TOP;
@@ -777,13 +957,13 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
     private void setupFab() {
         List<FabMenu.Item> items = new ArrayList<>();
-        items.add(new FabMenu.Item("‹", "Back", this::goBack));
-        items.add(new FabMenu.Item("+", "New tab", () -> openInNewTab(null, false)));
-        items.add(new FabMenu.Item("🔍", "Search", () -> { address.requestFocus(); showKeyboard(address); }));
-        items.add(new FabMenu.Item("▦", "Tabs", this::showTabs));
-        items.add(new FabMenu.Item("⛨", "Shields", this::showShields));
-        items.add(new FabMenu.Item("⚡", "GX Control", this::showGxControl));
-        items.add(new FabMenu.Item("☰", "Menu", this::showMenu));
+        items.add(new FabMenu.Item("‹", I18n.t("Back"), this::goBack));
+        items.add(new FabMenu.Item("+", I18n.t("New tab"), () -> openInNewTab(null, false)));
+        items.add(new FabMenu.Item("🔍", I18n.t("Search"), () -> { address.requestFocus(); showKeyboard(address); }));
+        items.add(new FabMenu.Item("▦", I18n.t("Tabs"), this::showTabs));
+        items.add(new FabMenu.Item("⛨", I18n.t("Shields"), this::showShields));
+        items.add(new FabMenu.Item("⚡", I18n.t("GX Control"), this::showGxControl));
+        items.add(new FabMenu.Item("☰", I18n.t("Menu"), this::showMenu));
         fab.setup(theme, items, new FabMenu.Gestures() {
             @Override public void swipeLeft() { goBack(); }
             @Override public void swipeRight() { goForward(); }
@@ -803,7 +983,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         address.setTextColor(theme.text);
         address.setHintTextColor(theme.muted);
         address.setBackground(shape(incognito ? Color.rgb(44, 26, 70) : theme.surface, 22, Theme.withAlpha(theme.accent, 45)));
-        TextView[] icons = {shieldIcon, reloadBtn, backBtn, forwardBtn, menuBtn};
+        TextView[] icons = {shieldIcon, reloadBtn, backBtn, forwardBtn, menuBtn, backTop, forwardTop, homeTop, newTabTop, menuTop};
         for (TextView t : icons) {
             t.setTextColor(theme.text);
             t.setBackground(pressable(Color.TRANSPARENT, 14, 0));
@@ -844,7 +1024,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         prefs.edit().putString("ui_theme", t.id).apply();
         applyTheme();
         refreshStartPages();
-        toast(t.name + " applied");
+        toast(I18n.f("%s applied", t.name));
     }
 
     // ================================================================== tabs
@@ -892,10 +1072,13 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         if (t.web == null) {
             createWeb(t);
             if (t.start || !Store.isWeb(t.url)) loadStart(t); else load(t, t.url);
-        } else if (t.start) {
+        } else if (t.start && System.currentTimeMillis() - t.startBuiltAt > 60000L) {
             loadStart(t);
         }
+        for (Tab other : tabs) if (other.web != null) other.web.getSettings().setOffscreenPreRaster(other == t);
         t.web.setVisibility(View.VISIBLE);
+        setBottomBarHidden(false);
+        if (fab != null && fabMode()) fab.setFabVisible(true);
         t.web.onResume();
         if (findBar.getVisibility() == View.VISIBLE) closeFind();
         enforceLimit();
@@ -1079,7 +1262,13 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         s.setSupportMultipleWindows(true);
         s.setJavaScriptCanOpenWindowsAutomatically(false);
         s.setMediaPlaybackRequiresUserGesture(true);
-        if (Build.VERSION.SDK_INT >= 26) s.setSafeBrowsingEnabled(true);
+        if (Build.VERSION.SDK_INT >= 26) {
+            s.setSafeBrowsingEnabled(true);
+            // Background tabs get a lower renderer priority so the visible page stays smooth.
+            w.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true);
+        }
+        w.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        w.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
         applySettings(t);
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(w, false);
@@ -1109,6 +1298,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             if (t.start) return;
             t.title = title;
             store.updateHistoryTitle(view.getUrl(), title);
+            if (wide()) rebuildTabStrip();
         }
 
         @Override public void onReceivedIcon(WebView view, Bitmap icon) { t.favicon = icon; }
@@ -1186,6 +1376,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             }
             if ("https".equals(scheme)) {
                 if (request.isForMainFrame()) {
+                    applyCookiePolicy(view, uri.toString());
                     boolean noJs = shields.blockScripts(uri.getHost());
                     if (view.getSettings().getJavaScriptEnabled() == noJs) {
                         view.getSettings().setJavaScriptEnabled(!noJs);
@@ -1214,6 +1405,10 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             t.resetCounters();
             view.setBackgroundColor(isStart ? theme.bg : Color.WHITE);
             if (!isStart && t.topHost != null) {
+                applyCookiePolicy(view, url);
+                if (isYoutube(t.topHost) && prefs.getBoolean("yt_adblock", true) && shields.shieldsUp(t.topHost)) {
+                    view.evaluateJavascript(Scripts.youtubeEarly(), null);
+                }
                 if (shields.blockFingerprinting(t.topHost)) view.evaluateJavascript(Scripts.fingerprint(fpSeed + t.topHost.hashCode()), null);
                 if (prefs.getBoolean("background_play", false)) view.evaluateJavascript(Scripts.backgroundPlay(), null);
             }
@@ -1240,6 +1435,16 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             Uri uri = request.getUrl();
             String host = uri.getHost();
             if (host == null) return null;
+            if (isYoutube(ShieldEngine.normalize(host)) && prefs.getBoolean("yt_adblock", true) && shields.shieldsUp(t.topHost)) {
+                String path = uri.getPath() == null ? "" : uri.getPath();
+                if (path.startsWith("/pagead/") || path.startsWith("/api/stats/ads") || path.startsWith("/ptracking")
+                    || path.startsWith("/get_midroll_") || path.startsWith("/youtubei/v1/player/ad_break")) {
+                    t.recordBlocked(host.toLowerCase(Locale.ROOT) + path, false);
+                    shields.totalAds.incrementAndGet();
+                    if (badgePending.compareAndSet(false, true)) ui.postDelayed(() -> { badgePending.set(false); refreshShieldChrome(); }, 250);
+                    return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
+                }
+            }
             int verdict = shields.classify(host, t.topHost);
             if (verdict == 0) return null;
             t.recordBlocked(host.toLowerCase(Locale.ROOT), verdict == 2);
@@ -1311,7 +1516,9 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
     @Override public void onScrollDirection(AsterWebView view, boolean down) {
         if (view.tab != current() || fab == null) return;
-        if (fabMode()) fab.setFabVisible(!down);
+        boolean hide = down && prefs.getBoolean("hide_bars_scroll", true);
+        if (fabMode()) fab.setFabVisible(!hide);
+        else if (!wide()) setBottomBarHidden(hide);
     }
 
     // ================================================================== navigation
@@ -1352,6 +1559,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         t.url = url;
         boolean noJs = shields.blockScripts(Uri.parse(url).getHost());
         t.web.getSettings().setJavaScriptEnabled(!noJs);
+        applyCookiePolicy(t.web, url);
         t.web.setBackgroundColor(Color.WHITE);
         Map<String, String> headers = new HashMap<>();
         headers.put("Sec-GPC", "1");
@@ -1368,6 +1576,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         t.web.getSettings().setJavaScriptEnabled(true);
         t.web.setBackgroundColor(theme.bg);
         String html = StartPage.build(theme, prefs, store, shields, incognito, prefs.getString("gx_corner_cache", ""));
+        t.startBuiltAt = System.currentTimeMillis();
         t.web.loadDataWithBaseURL(START, html, "text/html", "UTF-8", START);
         if (t == current()) updateChrome();
     }
@@ -1477,6 +1686,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         String n = tabs.size() > 99 ? ":D" : String.valueOf(tabs.size());
         tabsTop.setText(n);
         tabsBottom.setText(n);
+        if (wide()) rebuildTabStrip();
     }
 
     private void refreshShieldChrome() {
@@ -1504,7 +1714,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         String resolved = resolveInput(query);
         boolean looksUrl = resolved != null && !resolved.equals(StartPage.searchUrl(prefs.getString("search_engine", "brave"), query));
         if (looksUrl) addSuggestion("↗", query, "Go to site", () -> navigate(query));
-        else addSuggestion("🔍", query, "Search " + StartPage.engineName(prefs.getString("search_engine", "brave")), () -> navigate(query));
+        else addSuggestion("🔍", query, I18n.f("Search %s", StartPage.engineName(prefs.getString("search_engine", "brave"))), () -> navigate(query));
         for (final Store.Entry e : store.suggest(query, 4)) {
             addSuggestion(store.isBookmarked(e.url) ? "★" : "🕘", e.label(), Store.hostOf(e.url), () -> navigate(e.url));
         }
@@ -1643,7 +1853,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         }
         if (labels.isEmpty()) return;
         String title = Store.isWeb(link) ? link : image;
-        new AlertDialog.Builder(this).setTitle(title.length() > 80 ? title.substring(0, 80) + "…" : title)
+        new I18n.Builder(this).setTitle(title.length() > 80 ? title.substring(0, 80) + "…" : title)
             .setItems(labels.toArray(new String[0]), (d, w) -> actions.get(w).run()).show();
     }
 
@@ -1672,6 +1882,47 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         orientationBeforeFullscreen = getRequestedOrientation();
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
         setSystemBarsHidden(true);
+        updatePipParams(true);
+    }
+
+    private boolean pipAllowed() {
+        return Build.VERSION.SDK_INT >= 26 && prefs.getBoolean("pip", true)
+            && getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
+    }
+
+    /** Android 12+: leaving the app during full-screen video goes straight into picture-in-picture. */
+    private void updatePipParams(boolean video) {
+        if (Build.VERSION.SDK_INT < 31 || !pipAllowed()) return;
+        try {
+            setPictureInPictureParams(new PictureInPictureParams.Builder()
+                .setAspectRatio(new Rational(16, 9))
+                .setAutoEnterEnabled(video)
+                .build());
+        } catch (Exception ignored) { }
+    }
+
+    @Override protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        if (customView != null && pipAllowed() && Build.VERSION.SDK_INT < 31) {
+            try {
+                enterPictureInPictureMode(new PictureInPictureParams.Builder().setAspectRatio(new Rational(16, 9)).build());
+            } catch (Exception ignored) { }
+        }
+    }
+
+    @Override public void onPictureInPictureModeChanged(boolean inPip, Configuration config) {
+        super.onPictureInPictureModeChanged(inPip, config);
+        if (inPip) return;
+        // Closed (not expanded): stop the video unless background playback is on.
+        ui.postDelayed(() -> {
+            if (resumed || prefs.getBoolean("background_play", false)) return;
+            Tab t = current();
+            if (t != null && t.web != null) t.web.onPause();
+        }, 400);
+    }
+
+    private boolean inPip() {
+        return Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode();
     }
 
     private void exitFullscreen() {
@@ -1680,6 +1931,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         decor.removeView(customView);
         customView = null;
         setSystemBarsHidden(false);
+        updatePipParams(false);
         setRequestedOrientation(orientationBeforeFullscreen);
         if (customCallback != null) customCallback.onCustomViewHidden();
         customCallback = null;
@@ -1761,6 +2013,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         tiles.add(new Object[]{"文", "Translate", (Runnable) this::translate, false});
         tiles.add(new Object[]{"🌙", "Night mode", (Runnable) this::toggleNight, prefs.getBoolean("night_mode", false)});
         tiles.add(new Object[]{"⊕", "Add to Home", (Runnable) this::addToHome, false});
+        tiles.add(new Object[]{"🎮", "Rewards", (Runnable) this::openRewards, false});
         tiles.add(new Object[]{"⚡", "GX Control", (Runnable) this::showGxControl, false});
         tiles.add(new Object[]{"🎨", "Themes", (Runnable) this::showThemes, false});
         tiles.add(new Object[]{"⛨", "Shields", (Runnable) this::showShields, false});
@@ -1946,14 +2199,14 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     // ================================================================== tab switcher
 
     void showTabs() {
-        final Page page = new Page((incognito ? "Private tabs" : "Tabs") + " · " + tabs.size());
-        page.action("Close all", () -> new AlertDialog.Builder(this).setTitle("Close all tabs?")
+        final Page page = new Page(I18n.t(incognito ? "Private tabs" : "Tabs") + " · " + tabs.size());
+        page.action("Close all", () -> new I18n.Builder(this).setTitle("Close all tabs?")
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Close all", (d, w) -> { page.dismiss(); closeAllTabs(); }).show());
         captureThumb(current());
         buildTabGrid(page);
         page.bottom.setVisibility(View.VISIBLE);
-        TextView add = bold("+  New tab", 15, Color.WHITE);
+        TextView add = bold("+  " + I18n.t("New tab"), 15, Color.WHITE);
         add.setGravity(Gravity.CENTER);
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{theme.accent, theme.accent2});
         g.setCornerRadius(dp(22));
@@ -2149,15 +2402,16 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         statTile(stats, String.valueOf(ads + trk), "Blocked on this page");
         statTile(stats, StartPage.formatCount(shields.totalBlocked()), "Blocked all time");
         statTile(stats, StartPage.formatBytes(shields.totalBlocked() * ShieldEngine.BYTES_PER_BLOCK), "Data saved");
-        TextView detail = text(ads + " ads · " + trk + " trackers on this page", 12, theme.muted);
+        TextView detail = text(I18n.f("%d ads · %d trackers on this page", ads, trk), 12, theme.muted);
         detail.setPadding(dp(4), dp(8), 0, 0);
         body.addView(detail);
 
         if (host != null && up) {
-            sectionTitle(body, "Advanced controls for " + host);
+            sectionTitle(body, I18n.f("Advanced controls for %s", host));
             shieldToggle(body, "Block fingerprinting", "Adds noise to canvas, audio and hardware details", host, "fp", shields.fingerprintDefault(), d);
             shieldToggle(body, "Hide ad elements", "Cosmetic filtering of ad slots and banners", host, "cosmetic", shields.cosmeticEnabled(), d);
             shieldToggle(body, "Block scripts", "Disables JavaScript on this site (may break pages)", host, "scripts", false, d);
+            shieldToggle(body, "Allow third-party cookies", "Fixes sign-in on sites that need it", host, "cookies3p", false, d);
         }
         sectionTitle(body, "Global");
         rowCard(body, "Ads & trackers blocking", shields.aggressive() ? "Aggressive — also blocks first-party ads" : "Standard — blocks third-party ads & trackers", () -> {
@@ -2168,9 +2422,9 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             });
         });
         rowCard(body, "Blocked requests on this page", "See which domains were stopped", () -> { d[0].dismiss(); showBlockedList(t); });
-        String updated = shields.lastUpdate() == 0 ? "never" : android.text.format.DateUtils.getRelativeTimeSpanString(shields.lastUpdate()).toString();
+        String updated = shields.lastUpdate() == 0 ? I18n.t("never") : android.text.format.DateUtils.getRelativeTimeSpanString(shields.lastUpdate()).toString();
         rowCard(body, shields.isUpdating() ? "Updating filter lists…" : "Update filter lists",
-            StartPage.formatCount(shields.ruleCount()) + " network rules · " + StartPage.formatCount(shields.cosmeticCount()) + " cosmetic · updated " + updated, () -> {
+            I18n.f("%s network rules · %s cosmetic · updated %s", StartPage.formatCount(shields.ruleCount()), StartPage.formatCount(shields.cosmeticCount()), updated), () -> {
                 d[0].dismiss();
                 updateFilters();
             });
@@ -2190,7 +2444,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         if (incognito) { toast("Update filters from a normal window"); return; }
         toast("Updating EasyList, EasyPrivacy & AdGuard filters…");
         shields.updateAsync((ok, rules) -> ui.post(() -> {
-            toast(ok ? "Filters updated: " + StartPage.formatCount(rules) + " rules" : "Couldn't update filters — keeping existing rules");
+            toast(ok ? I18n.f("Filters updated: %s rules", StartPage.formatCount(rules)) : "Couldn't update filters — keeping existing rules");
             refreshShieldChrome();
         }));
     }
@@ -2233,7 +2487,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
                 for (Map.Entry<String, Integer> e : t.blockedHosts.entrySet()) sb.append(e.getKey()).append("  ·  ").append(e.getValue()).append('\n');
             }
         }
-        new AlertDialog.Builder(this).setTitle("Blocked on this page")
+        new I18n.Builder(this).setTitle("Blocked on this page")
             .setMessage(sb.length() == 0 ? "Nothing blocked on this page yet." : sb.toString())
             .setPositiveButton("OK", null).show();
     }
@@ -2269,8 +2523,8 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         ram.setPadding(dp(16), dp(14), dp(16), dp(14));
         ram.setBackground(shape(theme.surface, 18, 0));
         body.addView(ram);
-        ram.addView(bold("ASTER: " + appMb + " MB", 22, theme.text));
-        ram.addView(text("Device: " + (totalMb - availMb) + " MB used of " + totalMb + " MB · " + liveTabs() + " of " + tabs.size() + " tabs active", 12, theme.muted));
+        ram.addView(bold(I18n.f("ASTER: %d MB", appMb), 22, theme.text));
+        ram.addView(text(I18n.f("Device: %d MB used of %d MB · %d of %d tabs active", totalMb - availMb, totalMb, liveTabs(), tabs.size()), 12, theme.muted));
         ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         bar.setMax(100);
         bar.setProgress(totalMb == 0 ? 0 : (int) ((totalMb - availMb) * 100 / totalMb));
@@ -2280,7 +2534,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         ram.addView(bar, bl);
 
         switchRow(body, "RAM limiter", "Puts the least-used tabs to sleep to free memory", "gx_ram_limiter", true, this::enforceLimit);
-        final TextView limitLabel = text("Max active tabs: " + prefs.getInt("gx_max_live", 5), 13, theme.text);
+        final TextView limitLabel = text(I18n.f("Max active tabs: %d", prefs.getInt("gx_max_live", 5)), 13, theme.text);
         limitLabel.setPadding(dp(6), dp(6), 0, 0);
         body.addView(limitLabel);
         SeekBar seek = new SeekBar(this);
@@ -2290,7 +2544,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         seek.setThumbTintList(ColorStateList.valueOf(theme.accent));
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s, int p, boolean user) {
-                limitLabel.setText("Max active tabs: " + (p + 1));
+                limitLabel.setText(I18n.f("Max active tabs: %d", p + 1));
             }
             @Override public void onStartTrackingTouch(SeekBar s) { }
             @Override public void onStopTrackingTouch(SeekBar s) {
@@ -2372,7 +2626,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             texts.setOrientation(LinearLayout.VERTICAL);
             texts.setPadding(dp(12), 0, 0, 0);
             texts.addView(bold(t.name, 15, theme.text));
-            texts.addView(text(t.family + (t.glass ? " · translucent" : ""), 11, theme.muted));
+            texts.addView(text(t.family + (t.glass ? " · " + I18n.t("translucent") : ""), 11, theme.muted));
             row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
             if (t.id.equals(theme.id)) row.addView(bold("✓", 18, t.accent));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -2443,6 +2697,19 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         });
         switchRow(b, "Haptic feedback", "Vibrate lightly on taps", "gx_haptics", true, null);
 
+        rowCard(b, "Language", I18n.languageName(prefs.getString("language", "auto")), () -> {
+            p.dismiss();
+            final String[] codes = {"auto", "es", "en"};
+            String[] names = {I18n.languageName("auto"), I18n.languageName("es"), I18n.languageName("en")};
+            int checked = 0;
+            for (int i = 0; i < codes.length; i++) if (codes[i].equals(prefs.getString("language", "auto"))) checked = i;
+            choose("Language", names, checked, w -> {
+                prefs.edit().putString("language", codes[w]).apply();
+                saveSession();
+                recreate();
+            });
+        });
+
         sectionTitle(b, "Search");
         rowCard(b, "Search engine", StartPage.engineName(prefs.getString("search_engine", "brave")), () -> {
             p.dismiss();
@@ -2462,10 +2729,10 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         });
         switchRow(b, "Hide ad elements", "Cosmetic filtering from EasyList & AdGuard", "shield_cosmetic", true, null);
         switchRow(b, "Block fingerprinting", "Randomize canvas, audio and hardware signals", "shield_fingerprint", true, null);
-        rowCard(b, "Update filter lists", StartPage.formatCount(shields.ruleCount()) + " network rules", this::updateFilters);
-        rowCard(b, "Per-site Shields", shields.customizedSites().size() + " customized sites", () -> { p.dismiss(); showShieldSites(); });
+        rowCard(b, "Update filter lists", I18n.f("%s network rules", StartPage.formatCount(shields.ruleCount())), this::updateFilters);
+        rowCard(b, "Per-site Shields", I18n.f("%d customized sites", shields.customizedSites().size()), () -> { p.dismiss(); showShieldSites(); });
         rowCard(b, "Site permissions", "Camera, microphone and location", () -> { p.dismiss(); showSitePermissions(); });
-        rowCard(b, "Reset Shields statistics", StartPage.formatCount(shields.totalBlocked()) + " blocked so far", () -> {
+        rowCard(b, "Reset Shields statistics", I18n.f("%s blocked so far", StartPage.formatCount(shields.totalBlocked())), () -> {
             shields.resetStats();
             refreshStartPages();
             toast("Statistics reset");
@@ -2477,7 +2744,13 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         switchRow(b, "Restore tabs on start", null, "restore_tabs", true, null);
         switchRow(b, "Desktop site by default", null, "desktop_default", false, null);
         switchRow(b, "Pull to refresh", null, "pull_refresh", true, this::applyAllSettings);
+        switchRow(b, "Hide toolbar while scrolling", "More room for pages; scroll up to bring it back", "hide_bars_scroll", true, null);
         switchRow(b, "Background media playback", "Keep audio and video playing when ASTER is in the background", "background_play", false, null);
+        switchRow(b, "Picture-in-picture", "Full-screen videos keep playing in a small window when you leave ASTER", "pip", true, null);
+
+        sectionTitle(b, "YouTube & Rewards");
+        switchRow(b, "Remove YouTube ads", "Experimental: strips ad data from the player and blocks ad endpoints", "yt_adblock", true, null);
+        rowCard(b, "Microsoft Rewards", "Open your Rewards dashboard (search with Bing while signed in to earn points)", () -> { p.dismiss(); openRewards(); });
         rowCard(b, "Translation language", translationName(prefs.getString("translate_language", "es")), () -> {
             p.dismiss();
             final String[] codes = {"es", "en", "sl", "it", "fr", "de", "pt", "ja", "ko", "zh-CN"};
@@ -2500,7 +2773,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         });
 
         sectionTitle(b, "About");
-        rowCard(b, "ASTER Browser " + BuildConfig.VERSION_NAME, "Engine: Android System WebView · " + Build.MODEL, null);
+        rowCard(b, "ASTER Browser " + BuildConfig.VERSION_NAME, I18n.f("Engine: Android System WebView · %s", Build.MODEL), null);
         rowCard(b, "Check for updates", "Looks for new releases on GitHub", () -> { if (updater != null) updater.check(true); });
         rowCard(b, "Source code", Updater.REPO_URL.replace("https://", ""), () -> { p.dismiss(); openInNewTab(Updater.REPO_URL, false); });
         p.show();
@@ -2526,7 +2799,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         final String[] labels = {"Shields statistics", "Clock & date", "Speed dial", "Bookmarks", "GX Corner (free games)"};
         final boolean[] checked = new boolean[keys.length];
         for (int i = 0; i < keys.length; i++) checked[i] = prefs.getBoolean(keys[i], true);
-        new AlertDialog.Builder(this).setTitle("Customize start page")
+        new I18n.Builder(this).setTitle("Customize start page")
             .setMultiChoiceItems(labels, checked, (d, w, on) -> checked[w] = on)
             .setNeutralButton("Wallpaper…", (d, w) -> chooseWallpaper())
             .setNegativeButton("Cancel", null)
@@ -2542,17 +2815,17 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private void showShieldSites() {
         final List<String> sites = shields.customizedSites();
         if (sites.isEmpty()) {
-            new AlertDialog.Builder(this).setTitle("Per-site Shields").setMessage("No sites have custom Shields settings yet.")
+            new I18n.Builder(this).setTitle("Per-site Shields").setMessage("No sites have custom Shields settings yet.")
                 .setPositiveButton("OK", null).show();
             return;
         }
         String[] labels = new String[sites.size()];
         for (int i = 0; i < sites.size(); i++) {
             String h = sites.get(i);
-            labels[i] = h + (shields.siteFlag(h, "up", true) ? "" : "  · Shields down") + (shields.siteFlag(h, "scripts", false) ? "  · scripts blocked" : "");
+            labels[i] = h + (shields.siteFlag(h, "up", true) ? "" : "  · " + I18n.t("Shields down")) + (shields.siteFlag(h, "scripts", false) ? "  · " + I18n.t("scripts blocked") : "");
         }
-        new AlertDialog.Builder(this).setTitle("Per-site Shields")
-            .setItems(labels, (d, w) -> new AlertDialog.Builder(this).setTitle(sites.get(w))
+        new I18n.Builder(this).setTitle("Per-site Shields")
+            .setItems(labels, (d, w) -> new I18n.Builder(this).setTitle(sites.get(w))
                 .setMessage("Reset this site to the global Shields settings?")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Reset", (dd, ww) -> { shields.resetSite(sites.get(w)); toast("Reset"); }).show())
@@ -2562,7 +2835,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private void clearDataDialog() {
         final String[] labels = {"Browsing history", "Cookies and site data", "Cached images and files", "Shields statistics"};
         final boolean[] checked = {true, true, true, false};
-        new AlertDialog.Builder(this).setTitle("Clear browsing data")
+        new I18n.Builder(this).setTitle("Clear browsing data")
             .setMultiChoiceItems(labels, checked, (d, w, on) -> checked[w] = on)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Clear", (d, w) -> {
@@ -2599,7 +2872,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
     void showHistory() {
         final Page p = new Page("History");
-        p.action("Clear", () -> new AlertDialog.Builder(this).setTitle("Clear all history?")
+        p.action("Clear", () -> new I18n.Builder(this).setTitle("Clear all history?")
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Clear", (d, w) -> { store.clearHistory(); p.dismiss(); toast("History cleared"); }).show());
         fillEntries(p, store.history, false, "");
@@ -2656,7 +2929,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         if (bookmarks) labels.add("Edit");
         labels.add(bookmarks ? "Delete bookmark" : "Remove from history");
         if (!bookmarks) labels.add("Add to speed dial");
-        new AlertDialog.Builder(this).setTitle(e.label()).setItems(labels.toArray(new String[0]), (d, w) -> {
+        new I18n.Builder(this).setTitle(e.label()).setItems(labels.toArray(new String[0]), (d, w) -> {
             String choice = labels.get(w);
             switch (choice) {
                 case "Open in new tab": p.dismiss(); openInNewTab(e.url, false); break;
@@ -2687,7 +2960,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         final EditText url = input("URL", e.url);
         box.addView(name);
         box.addView(url);
-        new AlertDialog.Builder(this).setTitle("Edit bookmark").setView(box)
+        new I18n.Builder(this).setTitle("Edit bookmark").setView(box)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Save", (d, w) -> {
                 String u = webAddressOnly(url.getText().toString());
@@ -2725,10 +2998,10 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
                     long done = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
                     String state;
                     switch (status) {
-                        case DownloadManager.STATUS_SUCCESSFUL: state = "Completed · " + StartPage.formatBytes(size); break;
+                        case DownloadManager.STATUS_SUCCESSFUL: state = I18n.f("Completed · %s", StartPage.formatBytes(size)); break;
                         case DownloadManager.STATUS_FAILED: state = "Failed"; break;
                         case DownloadManager.STATUS_PAUSED: state = "Paused"; break;
-                        default: state = size > 0 ? "Downloading " + (done * 100 / size) + "% · " + StartPage.formatBytes(size) : "Downloading…"; break;
+                        default: state = size > 0 ? I18n.f("Downloading %d%% · %s", done * 100 / size, StartPage.formatBytes(size)) : "Downloading…"; break;
                     }
                     final boolean ok = status == DownloadManager.STATUS_SUCCESSFUL;
                     rowCard(p.body, "⬇  " + (title == null ? "File" : title), state, () -> { if (ok) openDownload(dm, id); });
@@ -2795,7 +3068,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         final EditText url = input("Web address", existing == null ? "" : existing.url);
         box.addView(name);
         box.addView(url);
-        AlertDialog.Builder b = new AlertDialog.Builder(this)
+        AlertDialog.Builder b = new I18n.Builder(this)
             .setTitle(existing == null ? "Add to speed dial" : "Edit shortcut")
             .setView(box)
             .setNegativeButton("Cancel", null)
@@ -2871,16 +3144,16 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     // ================================================================== backup
 
     private static final String[] BACKUP_STRINGS = {"ui_theme", "search_engine", "home_wallpaper", "nav_style", "address_position",
-        "translate_language", "shield_mode", "reader_theme"};
+        "translate_language", "shield_mode", "reader_theme", "language"};
     private static final String[] BACKUP_BOOLS = {"shield_enabled", "shield_cosmetic", "shield_fingerprint", "home_show_stats",
         "home_show_clock", "home_show_shortcuts", "home_show_bookmarks", "home_show_gx_corner", "night_mode", "gx_sounds",
         "gx_haptics", "suggestions", "restore_tabs", "background_play", "pull_refresh", "desktop_default", "data_saver",
-        "gx_ram_limiter", "clear_on_exit"};
+        "gx_ram_limiter", "clear_on_exit", "hide_bars_scroll", "pip", "yt_adblock"};
     private static final String[] BACKUP_INTS = {"text_zoom", "gx_max_live"};
 
     private void showBackup() {
         if (incognito) { toast("Use a normal window for backups"); return; }
-        new AlertDialog.Builder(this).setTitle("Backup & restore")
+        new I18n.Builder(this).setTitle("Backup & restore")
             .setMessage("Export bookmarks, history, speed dial, Shields settings, preferences and open tabs to a JSON file you control. Cookies and passwords are never included.")
             .setNegativeButton("Import", (d, w) -> {
                 Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -2936,7 +3209,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             }
             final JSONObject b = new JSONObject(new String(bytes, "UTF-8"));
             if (!"ASTER_BROWSER_BACKUP".equals(b.optString("format"))) throw new IllegalStateException("Not an ASTER backup");
-            new AlertDialog.Builder(this).setTitle("Restore backup?")
+            new I18n.Builder(this).setTitle("Restore backup?")
                 .setMessage("This replaces your bookmarks, history, speed dial and settings with the backup's contents.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Restore", (d, w) -> applyBackup(b)).show();
@@ -3001,8 +3274,8 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         dlDisposition = disposition;
         dlMime = mime;
         String name = URLUtil.guessFileName(url, disposition, mime);
-        new AlertDialog.Builder(this).setTitle("Download file?")
-            .setMessage(name + "\n\nSave to your Downloads folder?")
+        new I18n.Builder(this).setTitle("Download file?")
+            .setMessage(name + "\n\n" + I18n.t("Save to your Downloads folder?"))
             .setNegativeButton("Cancel", (d, w) -> dlUrl = null)
             .setPositiveButton("Download", (d, w) -> {
                 if (Build.VERSION.SDK_INT <= 28 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -3027,7 +3300,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
             long id = dm.enqueue(r);
             store.addDownload(id);
-            toast("Downloading " + name);
+            toast(I18n.f("Downloading %s", name));
         } catch (Exception e) {
             toast("Could not start download");
         }
@@ -3052,9 +3325,9 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         if (!cam && !mic) { request.grant(approved.toArray(new String[0])); return; }
         final boolean needCam = cam;
         final boolean needMic = mic;
-        String what = cam && mic ? "camera and microphone" : (cam ? "camera" : "microphone");
-        new AlertDialog.Builder(this).setTitle("Website permission")
-            .setMessage("Allow " + origin + " to use your " + what + "?")
+        String what = I18n.t(cam && mic ? "camera and microphone" : (cam ? "camera" : "microphone"));
+        new I18n.Builder(this).setTitle("Website permission")
+            .setMessage(I18n.f("Allow %s to use your %s?", origin, what))
             .setNegativeButton("Block", (d, w) -> request.deny())
             .setPositiveButton("Allow", (d, w) -> {
                 pendingMedia = request;
@@ -3093,8 +3366,8 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private void promptLocation(final String origin, final GeolocationPermissions.Callback cb) {
         if (cb == null) return;
         if (origin == null || !origin.startsWith("https://")) { cb.invoke(origin, false, false); return; }
-        new AlertDialog.Builder(this).setTitle("Location permission")
-            .setMessage("Allow " + origin + " to access your location?")
+        new I18n.Builder(this).setTitle("Location permission")
+            .setMessage(I18n.f("Allow %s to access your location?", origin))
             .setNegativeButton("Block", (d, w) -> cb.invoke(origin, false, false))
             .setPositiveButton("Allow", (d, w) -> {
                 pendingGeo = cb;
@@ -3128,7 +3401,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     private void showSitePermissions() {
         final List<String> entries = new ArrayList<>(prefs.getStringSet("site_permission_log", new java.util.LinkedHashSet<String>()));
         if (entries.isEmpty()) {
-            new AlertDialog.Builder(this).setTitle("Site permissions")
+            new I18n.Builder(this).setTitle("Site permissions")
                 .setMessage("No website has been given camera, microphone or location access.")
                 .setPositiveButton("Android app permissions", (d, w) -> openAppSettings())
                 .setNegativeButton("Close", null).show();
@@ -3136,7 +3409,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         }
         String[] labels = new String[entries.size()];
         for (int i = 0; i < labels.length; i++) labels[i] = entries.get(i).replace("||", "  ·  ");
-        new AlertDialog.Builder(this).setTitle("Site permissions")
+        new I18n.Builder(this).setTitle("Site permissions")
             .setItems(labels, (d, w) -> {
                 String[] parts = entries.get(w).split("\\|\\|", 2);
                 if ("Location".equals(parts[0]) && parts.length > 1) GeolocationPermissions.getInstance().clear(parts[1]);
