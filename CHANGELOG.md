@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.1] - 2026-11-06
+Smoothness fixes.
+
+### Fixed
+- Auto-hiding bottom toolbar no longer resizes the page: it now floats over the page and slides away, which removes the jumps and flicker when it hid or reappeared.
+- The start page could refuse to scroll down and snap back to the top (the toolbar resize changed the page height, and Arcade/statistics updates reloaded the whole page). Statistics and Arcade now update in place and keep your scroll position.
+- The toolbar only reacts to scrolling you do with your finger (and the fling after it), not to scroll changes caused by the page or by layout, and it stays put on short pages.
+- Pull-to-refresh no longer triggers when you start a normal scroll or a sideways swipe.
+
+### Improved
+- The bottom toolbar hides while you type in the address bar and returns afterwards.
+- Opening the tab switcher scrolls to the current tab.
+
 ## [1.3.0] - 2026-11-06
 Original identity and a new Liquid Glass.
 

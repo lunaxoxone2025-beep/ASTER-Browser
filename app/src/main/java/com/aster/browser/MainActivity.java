@@ -873,9 +873,11 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
                 address.setText(t == null || t.start ? "" : t.url);
                 address.selectAll();
                 updateSuggestions("");
+                setBottomBarHidden(true);
             } else {
                 suggestScroll.setVisibility(View.GONE);
                 updateAddress();
+                setBottomBarHidden(false);
             }
         });
         address.addTextChangedListener(new TextWatcher() {
@@ -1076,16 +1078,25 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         }
     }
 
-    /** Auto-hides the bottom toolbar while reading so pages get the full screen. */
+    /**
+     * Auto-hides the bottom toolbar while reading. The bar floats over the page and only slides,
+     * so the page never changes size (no jumps, no fighting with the scroll position).
+     */
     private void setBottomBarHidden(boolean hide) {
         if (bottomBarHidden == hide || bottomBar.getParent() == null) return;
         bottomBarHidden = hide;
-        if (hide) {
-            bottomBar.animate().translationY(bottomBar.getHeight()).setDuration(150)
-                .withEndAction(() -> { if (bottomBarHidden) bottomBar.setVisibility(View.GONE); }).start();
-        } else {
-            bottomBar.setVisibility(View.VISIBLE);
-            bottomBar.animate().translationY(0).setDuration(150).start();
+        ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) bottomBar.getLayoutParams();
+        float distance = bottomBar.getHeight() + (lp == null ? 0 : lp.bottomMargin) + dp(12);
+        bottomBar.animate().cancel();
+        bottomBar.animate()
+            .translationY(hide ? distance : 0)
+            .alpha(hide ? 0f : 1f)
+            .setDuration(hide ? 200 : 240)
+            .setInterpolator(hide ? new AccelerateInterpolator(1.4f) : new DecelerateInterpolator(2f))
+            .start();
+        if (!hide) {
+            Tab t = current();
+            if (t != null && t.web != null) t.web.resetScrollState();
         }
     }
     private boolean addressBottom() { return "bottom".equals(prefs.getString("address_position", "top")); }
@@ -1107,10 +1118,13 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         menuTop.setVisibility(wide || fabOn ? View.VISIBLE : View.GONE);
         tabsTop.setVisibility(fabOn && !wide ? View.VISIBLE : View.GONE);
         bottomBarHidden = false;
+        bottomBar.animate().cancel();
         bottomBar.setTranslationY(0);
+        bottomBar.setAlpha(1f);
         bottomBar.setVisibility(View.VISIBLE);
+        if (bottomBar.getParent() != null) ((ViewGroup) bottomBar.getParent()).removeView(bottomBar);
         LinearLayout.LayoutParams toolLp = new LinearLayout.LayoutParams(-1, -2);
-        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(-1, -2);
+        FrameLayout.LayoutParams barLp = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
         if (theme.glass) {
             toolLp.setMargins(dp(10), dp(bottom ? 4 : 6), dp(10), dp(bottom ? 10 : 4));
             barLp.setMargins(dp(16), dp(4), dp(16), dp(10));
@@ -1126,7 +1140,9 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             content.addView(progress, new LinearLayout.LayoutParams(-1, dp(2)));
             content.addView(toolbar, toolLp);
         }
-        if (!fabOn && !wide) content.addView(bottomBar, barLp);
+        // The bottom bar floats over the page (see setBottomBarHidden).
+        if (!fabOn && !wide) webArea.addView(bottomBar, barLp);
+        bottomBar.setElevation(theme.glass ? 0 : dp(10));
         if (wide) rebuildTabStrip();
         fab.setVisibility(fabOn ? View.VISIBLE : View.GONE);
         FrameLayout.LayoutParams sl = (FrameLayout.LayoutParams) suggestScroll.getLayoutParams();
@@ -1284,8 +1300,8 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         if (t.web == null) {
             createWeb(t);
             if (t.start || !Store.isWeb(t.url)) loadStart(t); else load(t, t.url);
-        } else if (t.start && System.currentTimeMillis() - t.startBuiltAt > 60000L) {
-            loadStart(t);
+        } else if (t.start) {
+            patchStartPage(t);
         }
         for (Tab other : tabs) if (other.web != null) other.web.getSettings().setOffscreenPreRaster(other == t);
         t.web.setVisibility(View.VISIBLE);
@@ -1616,6 +1632,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             t.topHost = isStart ? "aster.start" : ShieldEngine.normalize(Uri.parse(url == null ? "" : url).getHost());
             t.resetCounters();
             view.setBackgroundColor(isStart ? theme.bg : Color.WHITE);
+            if (t == current() && !address.hasFocus()) setBottomBarHidden(false);
             if (!isStart && t.topHost != null) {
                 applyCookiePolicy(view, url);
                 if (isYoutube(t.topHost) && prefs.getBoolean("yt_adblock", true) && shields.shieldsUp(t.topHost)) {
@@ -1791,6 +1808,18 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         t.startBuiltAt = System.currentTimeMillis();
         t.web.loadDataWithBaseURL(START, html, "text/html", "UTF-8", START);
         if (t == current()) updateChrome();
+    }
+
+    /** Updates statistics and Arcade on open start pages without reloading them (keeps scroll position). */
+    void patchStartPages() {
+        for (Tab t : tabs) if (t.start && t.web != null) patchStartPage(t);
+    }
+
+    private void patchStartPage(Tab t) {
+        if (t.web == null || !t.start) return;
+        String js = "(function(){try{var s=document.getElementById('stats');if(s)s.innerHTML=" + Scripts.quote(StartPage.statsHtml(shields)) + ";"
+            + "var a=document.getElementById('arcade-box');if(a)a.innerHTML=" + Scripts.quote(StartPage.arcadeHtml(prefs.getString("gx_corner_cache", ""))) + ";}catch(e){}})();";
+        t.web.evaluateJavascript(js, null);
     }
 
     void refreshStartPages() {
@@ -2603,6 +2632,10 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             boolean isActive = i == active;
             card.setBackground(shape(theme.surface, 18, isActive ? theme.accent : Theme.withAlpha(theme.muted, 50)));
             if (isActive) ((GradientDrawable) card.getBackground()).setStroke(dp(2), theme.accent);
+            if (isActive) {
+                final View activeRow = row;
+                page.scroll.post(() -> page.scroll.scrollTo(0, Math.max(0, activeRow.getTop() - dp(40))));
+            }
             ImageView img = new ImageView(this);
             img.setScaleType(ImageView.ScaleType.CENTER_CROP);
             if (t.thumbnail != null && !t.start) img.setImageBitmap(t.thumbnail);
@@ -3483,7 +3516,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
                 }
                 final String json = slim.toString();
                 prefs.edit().putString("gx_corner_cache", json).putLong("gx_corner_time", System.currentTimeMillis()).apply();
-                ui.post(this::refreshStartPages);
+                ui.post(this::patchStartPages);
             } catch (Exception ignored) {
             } finally {
                 if (c != null) c.disconnect();

@@ -98,9 +98,9 @@ final class StartPage {
             .append("<meta name='color-scheme' content='").append(t.light ? "light" : "dark").append("'><title>").append(I18n.t(incognito ? "Private tab" : "New tab")).append("</title><style>")
             .append(":root{--a:").append(accent).append(";--a2:").append(accent2).append(";--bg:").append(bg)
             .append(";--s:").append(surface).append(";--b:").append(border).append(";--t:").append(text).append(";--m:").append(muted).append("}")
-            .append("*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--t);font-family:system-ui,-apple-system,Roboto,Arial,sans-serif}")
+            .append("*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--t);font-family:system-ui,-apple-system,Roboto,Arial,sans-serif;overscroll-behavior-y:none}")
             .append("#bg{position:fixed;inset:0;z-index:0;overflow:hidden}canvas#fx{position:absolute;inset:0;width:100%;height:100%}")
-            .append(".page{position:relative;z-index:1;max-width:760px;margin:0 auto;padding:18px 16px 40px;min-height:100vh;display:flex;flex-direction:column}")
+            .append(".page{position:relative;z-index:1;max-width:760px;margin:0 auto;padding:18px 16px 112px;min-height:100vh;display:flex;flex-direction:column}")
             .append(".stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}")
             .append(".stat{background:var(--s);border:1px solid var(--b);border-radius:16px;padding:10px 8px;text-align:center;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}")
             .append(".stat b{display:block;font-size:20px;font-weight:800;color:var(--a);letter-spacing:.3px}.stat span{display:block;margin-top:3px;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--m)}")
@@ -136,12 +136,7 @@ final class StartPage {
                 .append("<br><br>").append(esc(I18n.t("Your internet provider, employer or the sites you visit can still see your activity."))).append("</div>");
         } else {
             if (prefs.getBoolean("home_show_stats", true)) {
-                long blocked = shields.totalBlocked();
-                h.append("<section class='stats'>")
-                    .append("<div class='stat'><b>").append(formatCount(blocked)).append("</b><span>").append(esc(I18n.t("Ads & trackers"))).append("</span></div>")
-                    .append("<div class='stat'><b>").append(formatBytes(blocked * ShieldEngine.BYTES_PER_BLOCK)).append("</b><span>").append(esc(I18n.t("Data saved"))).append("</span></div>")
-                    .append("<div class='stat'><b>").append(formatTime(blocked * ShieldEngine.MS_PER_BLOCK)).append("</b><span>").append(esc(I18n.t("Time saved"))).append("</span></div>")
-                    .append("</section>");
+                h.append("<section class='stats' id='stats'>").append(statsHtml(shields)).append("</section>");
             }
             if (prefs.getBoolean("home_show_clock", true)) {
                 h.append("<div class='clock' id='clk'>--:--</div><div class='date' id='dt'></div>");
@@ -176,7 +171,7 @@ final class StartPage {
 
             if (prefs.getBoolean("home_show_gx_corner", true)) {
                 h.append("<h3><span>Arcade &middot; ").append(esc(I18n.t("Free games"))).append("</span><a href='aster://gxcorner/refresh'>").append(esc(I18n.t("REFRESH"))).append("</a></h3>");
-                h.append(gxCorner(gxCornerJson));
+                h.append("<div id='arcade-box'>").append(gxCorner(gxCornerJson)).append("</div>");
             }
             h.append("<div class='foot'><a href='aster://customize'>&#9881; ").append(esc(I18n.t("CUSTOMIZE"))).append("</a><a href='aster://shields'>&#9960; HALO</a></div>");
         }
@@ -221,6 +216,17 @@ final class StartPage {
             + "<a class='ib ghost' href='aster://voice' aria-label='Voice search'>&#127908;</a>"
             + "<button class='ib' type='submit' aria-label='Search'>&#10140;</button></form>";
     }
+
+    /** Inner HTML of the statistics strip (also used to refresh it in place). */
+    static String statsHtml(ShieldEngine shields) {
+        long blocked = shields.totalBlocked();
+        return "<div class='stat'><b>" + formatCount(blocked) + "</b><span>" + esc(I18n.t("Ads & trackers")) + "</span></div>"
+            + "<div class='stat'><b>" + formatBytes(blocked * ShieldEngine.BYTES_PER_BLOCK) + "</b><span>" + esc(I18n.t("Data saved")) + "</span></div>"
+            + "<div class='stat'><b>" + formatTime(blocked * ShieldEngine.MS_PER_BLOCK) + "</b><span>" + esc(I18n.t("Time saved")) + "</span></div>";
+    }
+
+    /** Inner HTML of the Arcade row (also used to refresh it in place). */
+    static String arcadeHtml(String json) { return gxCorner(json); }
 
     private static String gxCorner(String json) {
         if (json == null || json.isEmpty()) return "<div class='empty'>" + esc(I18n.t("Loading free games from GamerPower… tap Refresh if nothing appears.")) + "</div>";
