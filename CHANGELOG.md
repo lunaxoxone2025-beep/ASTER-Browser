@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.0] - 2026-11-06
+Integrated, fluid interface.
+
+### Changed
+- New integrated browser menu (Brave + Opera GX style): quick-action strip (forward, bookmark, downloads, share, reload), current-page card with Shields status, in-place quick toggles (night mode, desktop site, Shields, data saver, background play, reader) and a tile grid.
+- All panels (menu, Shields, GX Control, themes, link menu) are now drawn inside the browser window instead of separate dialogs: they open instantly, animate smoothly and can be dragged down to close.
+- Tabs, settings, history, bookmarks and downloads open as sliding full-screen pages; the back gesture closes them.
+- Every button reacts with a short press animation; page loading progress animates smoothly.
+
 ## [1.1.0] - 2026-11-06
 Smoothness, comfort, YouTube and Microsoft Rewards.
 

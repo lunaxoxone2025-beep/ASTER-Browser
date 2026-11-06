@@ -52,6 +52,9 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.OvershootInterpolator;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
@@ -367,6 +370,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
     @Override public void onBackPressed() {
         if (customView != null) { exitFullscreen(); return; }
+        if (!overlays.isEmpty()) { overlays.get(overlays.size() - 1).dismiss(); return; }
         if (fab != null && fab.isExpanded()) { fab.collapse(); return; }
         if (findBar != null && findBar.getVisibility() == View.VISIBLE) { closeFind(); return; }
         if (address != null && address.hasFocus()) { address.clearFocus(); hideKeyboard(); return; }
@@ -441,8 +445,19 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     void onTap(View v, final Runnable action) {
         v.setOnClickListener(x -> {
             feedback(x);
+            bounce(x);
             action.run();
         });
+    }
+
+    /** Small press animation so every control reacts to the finger. */
+    void bounce(View v) {
+        if (v == null) return;
+        float s = v.getWidth() > dp(220) ? 0.97f : 0.86f;
+        v.animate().cancel();
+        v.setScaleX(s);
+        v.setScaleY(s);
+        v.animate().scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(new OvershootInterpolator(2.2f)).start();
     }
 
     void feedback(View v) {
@@ -473,65 +488,180 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         if (imm != null && address != null) imm.hideSoftInputFromWindow(address.getWindowToken(), 0);
     }
 
-    /** Bottom sheet dialog with ASTER styling. */
-    Dialog sheet(View body) {
-        Dialog d = new Dialog(this);
-        d.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        LinearLayout frame = new LinearLayout(this);
-        frame.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(theme.glass ? Color.rgb(18, 26, 44) : theme.bg);
-        float r = dp(24);
-        bg.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
-        bg.setStroke(dp(1), Theme.withAlpha(theme.accent, 70));
-        frame.setBackground(bg);
-        View handle = new View(this);
-        handle.setBackground(shape(Theme.withAlpha(theme.muted, 120), 3, 0));
-        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(dp(40), dp(5));
-        hp.gravity = Gravity.CENTER_HORIZONTAL;
-        hp.topMargin = dp(10);
-        frame.addView(handle, hp);
-        ScrollView sv = new ScrollView(this);
-        sv.setFillViewport(false);
-        sv.addView(body);
-        frame.addView(sv, new LinearLayout.LayoutParams(-1, -2));
-        d.setContentView(frame);
-        Window w = d.getWindow();
-        if (w != null) {
-            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            int width = Math.min(getResources().getDisplayMetrics().widthPixels, dp(600));
-            w.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT);
-            w.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-            w.setWindowAnimations(android.R.style.Animation_InputMethod);
-            w.setDimAmount(0.55f);
+    // ================================================================== integrated panels
+    // Menus, panels and pages are drawn inside the browser window (no separate dialog windows),
+    // so they open instantly, animate smoothly and can be dragged closed.
+
+    interface Overlay { void dismiss(); }
+
+    private final List<Overlay> overlays = new ArrayList<>();
+    private FrameLayout rootFrame;
+    private FrameLayout overlayLayer;
+
+    Sheet sheet(View body) { return new Sheet(body); }
+
+    /** Bottom panel with drag-to-dismiss, inspired by the integrated menus of Brave and Opera GX. */
+    final class Sheet implements Overlay {
+        final View scrim;
+        final DragPanel panel;
+        private boolean closing;
+
+        Sheet(View body) {
+            scrim = new View(MainActivity.this);
+            scrim.setBackgroundColor(Color.argb(150, 0, 0, 0));
+            scrim.setClickable(true);
+            scrim.setOnClickListener(v -> dismiss());
+            panel = new DragPanel(this);
+            panel.setOrientation(LinearLayout.VERTICAL);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setColor(theme.glass ? Color.rgb(18, 26, 44) : Theme.blend(theme.bg, theme.surface, 0.35f));
+            float r = dp(26);
+            bg.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
+            bg.setStroke(dp(1), Theme.withAlpha(theme.accent, 80));
+            panel.setBackground(bg);
+            panel.setElevation(dp(24));
+            panel.setClickable(true);
+            View handle = new View(MainActivity.this);
+            handle.setBackground(shape(Theme.withAlpha(theme.muted, 150), 3, 0));
+            LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(dp(44), dp(5));
+            hp.gravity = Gravity.CENTER_HORIZONTAL;
+            hp.topMargin = dp(10);
+            hp.bottomMargin = dp(4);
+            panel.addView(handle, hp);
+            panel.scroll = new ScrollView(MainActivity.this);
+            panel.scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+            panel.scroll.setVerticalScrollBarEnabled(false);
+            panel.scroll.addView(body);
+            panel.addView(panel.scroll, new LinearLayout.LayoutParams(-1, -2));
         }
-        applyInsets(frame);
-        return d;
+
+        void show() {
+            hideKeyboard();
+            overlayLayer.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
+            int avail = overlayLayer.getWidth() > 0 ? overlayLayer.getWidth() : getResources().getDisplayMetrics().widthPixels;
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Math.min(avail, dp(620)), -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+            lp.topMargin = dp(56);
+            overlayLayer.addView(panel, lp);
+            overlays.add(this);
+            scrim.setAlpha(0f);
+            scrim.animate().alpha(1f).setDuration(200).start();
+            panel.setTranslationY(dp(420));
+            panel.setAlpha(0.6f);
+            panel.animate().translationY(0).alpha(1f).setDuration(280).setInterpolator(new DecelerateInterpolator(2.2f)).start();
+        }
+
+        @Override public void dismiss() {
+            if (closing) return;
+            closing = true;
+            overlays.remove(this);
+            scrim.animate().alpha(0f).setDuration(180).start();
+            float h = panel.getHeight() > 0 ? panel.getHeight() : dp(420);
+            panel.animate().translationY(h).setDuration(200).setInterpolator(new AccelerateInterpolator(1.6f))
+                .withEndAction(() -> {
+                    overlayLayer.removeView(panel);
+                    overlayLayer.removeView(scrim);
+                }).start();
+        }
     }
 
-    /** Full-screen page used for tabs, settings, history, bookmarks and downloads. */
-    final class Page {
-        final Dialog dialog;
+    /** Panel that follows the finger downwards (when its content is at the top) and closes on release. */
+    final class DragPanel extends LinearLayout {
+        ScrollView scroll;
+        private final Sheet owner;
+        private float startY;
+        private float lastY;
+        private long lastT;
+        private float velocity;
+
+        DragPanel(Sheet owner) {
+            super(MainActivity.this);
+            this.owner = owner;
+        }
+
+        @Override public boolean onInterceptTouchEvent(MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    startY = e.getRawY();
+                    lastY = startY;
+                    lastT = System.currentTimeMillis();
+                    velocity = 0;
+                    return false;
+                case MotionEvent.ACTION_MOVE: {
+                    float dy = e.getRawY() - startY;
+                    boolean atTop = scroll == null || scroll.getScrollY() == 0;
+                    return dy > dp(12) && atTop;
+                }
+                default:
+                    return false;
+            }
+        }
+
+        @Override public boolean onTouchEvent(MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    startY = e.getRawY();
+                    lastY = startY;
+                    lastT = System.currentTimeMillis();
+                    return true;
+                case MotionEvent.ACTION_MOVE: {
+                    float dy = Math.max(0, e.getRawY() - startY);
+                    long now = System.currentTimeMillis();
+                    if (now > lastT) velocity = (e.getRawY() - lastY) / (now - lastT);
+                    lastY = e.getRawY();
+                    lastT = now;
+                    setTranslationY(dy);
+                    owner.scrim.setAlpha(Math.max(0f, 1f - dy / Math.max(1, getHeight())));
+                    return true;
+                }
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL: {
+                    float dy = e.getRawY() - startY;
+                    if (dy > Math.min(dp(150), getHeight() * 0.3f) || velocity > 1.1f) owner.dismiss();
+                    else {
+                        animate().translationY(0).setDuration(200).setInterpolator(new DecelerateInterpolator(2f)).start();
+                        owner.scrim.animate().alpha(1f).setDuration(200).start();
+                    }
+                    return true;
+                }
+                default:
+                    return true;
+            }
+        }
+    }
+
+    /** Full-screen page (tabs, settings, history, bookmarks, downloads) that slides in over the browser. */
+    final class Page implements Overlay {
+        final LinearLayout root;
         final LinearLayout body;
         final LinearLayout header;
         final LinearLayout bottom;
         final ScrollView scroll;
+        private final boolean fromBottom;
+        private boolean closing;
 
-        Page(String title) {
-            dialog = new Dialog(MainActivity.this, android.R.style.Theme_DeviceDefault_NoActionBar);
-            LinearLayout root = new LinearLayout(MainActivity.this);
+        Page(String title) { this(title, false); }
+
+        Page(String title, boolean fromBottom) {
+            this.fromBottom = fromBottom;
+            root = new LinearLayout(MainActivity.this);
             root.setOrientation(LinearLayout.VERTICAL);
             root.setBackgroundColor(theme.bg);
+            root.setClickable(true);
+            root.setElevation(dp(16));
             header = new LinearLayout(MainActivity.this);
             header.setGravity(Gravity.CENTER_VERTICAL);
             header.setPadding(dp(6), dp(6), dp(10), dp(6));
-            TextView back = chromeButton("←", 22, "Back");
-            onTap(back, dialog::dismiss);
+            TextView back = chromeButton(fromBottom ? "⌄" : "←", 22, "Back");
+            back.setBackground(pressable(Color.TRANSPARENT, 14, 0));
+            onTap(back, this::dismiss);
             header.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
             TextView t = bold(title, 19, theme.text);
+            t.setSingleLine(true);
+            t.setEllipsize(android.text.TextUtils.TruncateAt.END);
             header.addView(t, new LinearLayout.LayoutParams(0, -2, 1));
             root.addView(header);
             scroll = new ScrollView(MainActivity.this);
+            scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
             body = new LinearLayout(MainActivity.this);
             body.setOrientation(LinearLayout.VERTICAL);
             body.setPadding(dp(14), dp(4), dp(14), dp(24));
@@ -542,15 +672,6 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             bottom.setPadding(dp(12), dp(8), dp(12), dp(10));
             bottom.setVisibility(View.GONE);
             root.addView(bottom);
-            dialog.setContentView(root);
-            Window w = dialog.getWindow();
-            if (w != null) {
-                w.setBackgroundDrawable(new ColorDrawable(theme.bg));
-                w.setStatusBarColor(theme.bg);
-                w.setNavigationBarColor(theme.bg);
-                w.setWindowAnimations(android.R.style.Animation_Dialog);
-            }
-            applyInsets(root);
         }
 
         TextView action(String label, Runnable r) {
@@ -562,8 +683,33 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             return a;
         }
 
-        void show() { dialog.show(); }
-        void dismiss() { dialog.dismiss(); }
+        void show() {
+            hideKeyboard();
+            overlayLayer.addView(root, new FrameLayout.LayoutParams(-1, -1));
+            overlays.add(this);
+            root.setAlpha(0f);
+            if (fromBottom) {
+                root.setTranslationY(dp(90));
+                root.setScaleX(0.96f);
+                root.setScaleY(0.96f);
+            } else {
+                root.setTranslationX(overlayLayer.getWidth() > 0 ? overlayLayer.getWidth() * 0.3f : dp(120));
+            }
+            root.animate().alpha(1f).translationX(0).translationY(0).scaleX(1f).scaleY(1f)
+                .setDuration(260).setInterpolator(new DecelerateInterpolator(2.2f)).start();
+        }
+
+        @Override public void dismiss() {
+            if (closing) return;
+            closing = true;
+            overlays.remove(this);
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null) imm.hideSoftInputFromWindow(root.getWindowToken(), 0);
+            if (fromBottom) root.animate().translationY(dp(90)).scaleX(0.96f).scaleY(0.96f);
+            else root.animate().translationX(root.getWidth() * 0.3f);
+            root.animate().alpha(0f).setDuration(190).setInterpolator(new AccelerateInterpolator(1.5f))
+                .withEndAction(() -> overlayLayer.removeView(root)).start();
+        }
     }
 
     TextView sectionTitle(LinearLayout parent, String title) {
@@ -641,8 +787,12 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         getWindow().setNavigationBarColor(theme.bg);
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        setContentView(content);
-        applyInsets(content);
+        rootFrame = new FrameLayout(this);
+        rootFrame.addView(content, new FrameLayout.LayoutParams(-1, -1));
+        overlayLayer = new FrameLayout(this);
+        rootFrame.addView(overlayLayer, new FrameLayout.LayoutParams(-1, -1));
+        setContentView(rootFrame);
+        applyInsets(rootFrame);
 
         // ---- toolbar
         toolbar = new LinearLayout(this);
@@ -977,6 +1127,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         getWindow().setStatusBarColor(theme.bg);
         getWindow().setNavigationBarColor(theme.bg);
         content.setBackgroundColor(theme.bg);
+        rootFrame.setBackgroundColor(theme.bg);
         int barBg = incognito ? Color.rgb(24, 14, 40) : (theme.glass ? Color.rgb(16, 24, 40) : theme.bg);
         toolbar.setBackgroundColor(barBg);
         bottomBar.setBackgroundColor(barBg);
@@ -1290,7 +1441,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
             t.progress = p;
             if (t == current()) {
                 progress.setVisibility(p >= 100 ? View.GONE : View.VISIBLE);
-                progress.setProgress(p);
+                if (Build.VERSION.SDK_INT >= 24) progress.setProgress(p, true); else progress.setProgress(p);
             }
         }
 
@@ -1853,8 +2004,20 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         }
         if (labels.isEmpty()) return;
         String title = Store.isWeb(link) ? link : image;
-        new I18n.Builder(this).setTitle(title.length() > 80 ? title.substring(0, 80) + "…" : title)
-            .setItems(labels.toArray(new String[0]), (d, w) -> actions.get(w).run()).show();
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(16), dp(4), dp(16), dp(16));
+        TextView head = text(title.length() > 120 ? title.substring(0, 120) + "…" : title, 12, theme.muted);
+        head.setMaxLines(2);
+        head.setPadding(dp(4), dp(2), dp(4), dp(10));
+        body.addView(head);
+        final Sheet[] d = new Sheet[1];
+        for (int i = 0; i < labels.size(); i++) {
+            final Runnable action = actions.get(i);
+            rowCard(body, labels.get(i), null, () -> { d[0].dismiss(); action.run(); });
+        }
+        d[0] = sheet(body);
+        d[0].show();
     }
 
     private void copy(String s) {
@@ -1978,71 +2141,161 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
 
     // ================================================================== menu
 
+    interface Toggle { boolean run(); }
+
+    /**
+     * Integrated browser menu: a quick-action strip and page card (Brave style), switchable
+     * quick toggles and a tile grid (Opera GX style). Toggles change in place without closing.
+     */
     private void showMenu() {
         final Tab t = current();
         final boolean web = t != null && !t.start && Store.isWeb(t.url);
+        final Sheet[] holder = new Sheet[1];
+        final Runnable close = () -> { if (holder[0] != null) holder[0].dismiss(); };
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(14), dp(8), dp(14), dp(16));
-        final Dialog[] holder = new Dialog[1];
+        body.setPadding(dp(14), dp(2), dp(14), dp(18));
 
+        // 1) quick actions
+        LinearLayout strip = new LinearLayout(this);
+        strip.setGravity(Gravity.CENTER);
+        body.addView(strip, new LinearLayout.LayoutParams(-1, -2));
+        boolean canFwd = t != null && t.web != null && t.web.canGoForward();
+        stripButton(strip, "›", "Forward", canFwd, () -> { close.run(); goForward(); });
+        final boolean saved = web && store.isBookmarked(t.url);
+        final TextView[] star = new TextView[1];
+        star[0] = stripButton(strip, saved ? "★" : "☆", "Bookmark", web && !incognito, () -> {
+            toggleBookmark();
+            boolean now = store.isBookmarked(t.url);
+            star[0].setText(now ? "★" : "☆");
+            star[0].setTextColor(now ? theme.accent : theme.text);
+        });
+        if (saved) star[0].setTextColor(theme.accent);
+        stripButton(strip, "⬇", "Downloads", true, () -> { close.run(); showDownloads(); });
+        stripButton(strip, "↗", "Share", web, () -> { close.run(); share(t.url); });
+        final boolean loading = t != null && t.loading;
+        stripButton(strip, loading ? "✕" : "↻", loading ? "Stop" : "Reload", t != null, () -> {
+            close.run();
+            Tab c = current();
+            if (c != null && c.loading && c.web != null) c.web.stopLoading(); else reload();
+        });
+
+        // 2) current page + Shields status
         if (web) {
-            LinearLayout head = new LinearLayout(this);
-            head.setOrientation(LinearLayout.VERTICAL);
-            head.setPadding(dp(6), dp(4), dp(6), dp(10));
-            TextView title = bold(t.displayTitle(), 15, theme.text);
+            LinearLayout card = new LinearLayout(this);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setPadding(dp(12), dp(10), dp(10), dp(10));
+            card.setBackground(pressable(theme.surface, 18, 0));
+            String host = Store.hostOf(t.url);
+            TextView avatar = bold(host.isEmpty() ? "?" : host.substring(0, 1).toUpperCase(Locale.ROOT), 17, Color.WHITE);
+            avatar.setGravity(Gravity.CENTER);
+            GradientDrawable av = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{theme.accent, theme.accent2});
+            av.setShape(GradientDrawable.OVAL);
+            avatar.setBackground(av);
+            card.addView(avatar, new LinearLayout.LayoutParams(dp(40), dp(40)));
+            LinearLayout texts = new LinearLayout(this);
+            texts.setOrientation(LinearLayout.VERTICAL);
+            texts.setPadding(dp(12), 0, dp(8), 0);
+            TextView title = bold(t.displayTitle(), 14, theme.text);
             title.setSingleLine(true);
             title.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            head.addView(title);
-            TextView url = text(Store.hostOf(t.url), 12, theme.muted);
-            head.addView(url);
-            body.addView(head);
+            texts.addView(title);
+            TextView url = text((t.url.startsWith("https://") ? "🔒 " : "") + host, 12, theme.muted);
+            url.setSingleLine(true);
+            texts.addView(url);
+            card.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));
+            boolean up = shields.shieldsUp(t.topHost);
+            TextView pill = bold("⛨ " + t.blocked(), 12, up ? theme.accent : theme.muted);
+            pill.setPadding(dp(10), dp(6), dp(10), dp(6));
+            pill.setBackground(shape(up ? Theme.withAlpha(theme.accent, 45) : theme.surface2, 14, 0));
+            card.addView(pill);
+            onTap(card, () -> { close.run(); showShields(); });
+            LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, -2);
+            cl.topMargin = dp(12);
+            body.addView(card, cl);
         }
 
-        List<Object[]> tiles = new ArrayList<>();
-        tiles.add(new Object[]{"+", "New tab", (Runnable) () -> openInNewTab(null, false), false});
-        tiles.add(new Object[]{"👁", incognito ? "New private tab" : "Private window", (Runnable) () -> openPrivate(null), false});
-        tiles.add(new Object[]{"★", "Bookmarks", (Runnable) this::showBookmarks, false});
-        tiles.add(new Object[]{"🕘", "History", (Runnable) this::showHistory, false});
-        tiles.add(new Object[]{"⬇", "Downloads", (Runnable) this::showDownloads, false});
-        tiles.add(new Object[]{web && store.isBookmarked(t.url) ? "★" : "☆", web && store.isBookmarked(t.url) ? "Bookmarked" : "Bookmark", (Runnable) this::toggleBookmark, web && store.isBookmarked(t.url)});
-        tiles.add(new Object[]{"🔎", "Find in page", (Runnable) this::openFind, false});
-        tiles.add(new Object[]{"↗", "Share", (Runnable) () -> { if (web) share(t.url); }, false});
-        tiles.add(new Object[]{"🖥", "Desktop site", (Runnable) this::toggleDesktop, t != null && t.desktop});
-        tiles.add(new Object[]{"📖", "Reader", (Runnable) this::toggleReader, t != null && t.reader});
-        tiles.add(new Object[]{"文", "Translate", (Runnable) this::translate, false});
-        tiles.add(new Object[]{"🌙", "Night mode", (Runnable) this::toggleNight, prefs.getBoolean("night_mode", false)});
-        tiles.add(new Object[]{"⊕", "Add to Home", (Runnable) this::addToHome, false});
-        tiles.add(new Object[]{"🎮", "Rewards", (Runnable) this::openRewards, false});
-        tiles.add(new Object[]{"⚡", "GX Control", (Runnable) this::showGxControl, false});
-        tiles.add(new Object[]{"🎨", "Themes", (Runnable) this::showThemes, false});
-        tiles.add(new Object[]{"⛨", "Shields", (Runnable) this::showShields, false});
-        tiles.add(new Object[]{"⚙", "Settings", (Runnable) this::showSettings, false});
-        tiles.add(new Object[]{"⏻", incognito ? "Close private" : "Exit", (Runnable) this::exitBrowser, false});
+        // 3) quick toggles
+        HorizontalScrollView hs = new HorizontalScrollView(this);
+        hs.setHorizontalScrollBarEnabled(false);
+        hs.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        LinearLayout chips = new LinearLayout(this);
+        chips.setPadding(0, dp(12), 0, dp(4));
+        hs.addView(chips);
+        body.addView(hs, new LinearLayout.LayoutParams(-1, -2));
+        toggleChip(chips, "🌙", "Night mode", prefs.getBoolean("night_mode", false), () -> {
+            toggleNight();
+            return prefs.getBoolean("night_mode", false);
+        });
+        if (web) {
+            toggleChip(chips, "🖥", "Desktop site", t.desktop, () -> {
+                toggleDesktop();
+                Tab c = current();
+                return c != null && c.desktop;
+            });
+            toggleChip(chips, "⛨", "Shields", shields.shieldsUp(t.topHost), () -> {
+                boolean on = !shields.shieldsUp(t.topHost);
+                shields.setSite(t.topHost, "up", on);
+                reload();
+                refreshShieldChrome();
+                return on;
+            });
+        }
+        toggleChip(chips, "🍃", "Data saver", prefs.getBoolean("data_saver", false), () -> {
+            boolean on = !prefs.getBoolean("data_saver", false);
+            prefs.edit().putBoolean("data_saver", on).apply();
+            applyAllSettings();
+            reload();
+            return on;
+        });
+        toggleChip(chips, "🎧", "Background play", prefs.getBoolean("background_play", false), () -> {
+            boolean on = !prefs.getBoolean("background_play", false);
+            prefs.edit().putBoolean("background_play", on).apply();
+            return on;
+        });
+        if (web) toggleChip(chips, "📖", "Reader", t.reader, () -> { close.run(); toggleReader(); return !t.reader; });
 
+        // 4) tiles
+        List<Object[]> tiles = new ArrayList<>();
+        tiles.add(new Object[]{"+", "New tab", (Runnable) () -> openInNewTab(null, false)});
+        tiles.add(new Object[]{"👁", incognito ? "New private tab" : "Private window", (Runnable) () -> openPrivate(null)});
+        tiles.add(new Object[]{"★", "Bookmarks", (Runnable) this::showBookmarks});
+        tiles.add(new Object[]{"🕘", "History", (Runnable) this::showHistory});
+        tiles.add(new Object[]{"🔎", "Find in page", (Runnable) this::openFind});
+        tiles.add(new Object[]{"文", "Translate", (Runnable) this::translate});
+        tiles.add(new Object[]{"⊕", "Add to Home", (Runnable) this::addToHome});
+        tiles.add(new Object[]{"🎮", "Rewards", (Runnable) this::openRewards});
+        tiles.add(new Object[]{"⚡", "GX Control", (Runnable) this::showGxControl});
+        tiles.add(new Object[]{"🎨", "Themes", (Runnable) this::showThemes});
+        tiles.add(new Object[]{"⚙", "Settings", (Runnable) this::showSettings});
+        tiles.add(new Object[]{"⏻", incognito ? "Close private" : "Exit", (Runnable) this::exitBrowser});
         int cols = getResources().getConfiguration().screenWidthDp >= 480 ? 6 : 4;
         LinearLayout row = null;
         for (int i = 0; i < tiles.size(); i++) {
             if (i % cols == 0) {
                 row = new LinearLayout(this);
-                body.addView(row, new LinearLayout.LayoutParams(-1, -2));
+                LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
+                rl.topMargin = dp(i == 0 ? 10 : 2);
+                body.addView(row, rl);
             }
             final Object[] tile = tiles.get(i);
             LinearLayout cell = new LinearLayout(this);
             cell.setOrientation(LinearLayout.VERTICAL);
             cell.setGravity(Gravity.CENTER);
-            cell.setPadding(dp(2), dp(10), dp(2), dp(10));
-            boolean on = (Boolean) tile[3];
-            cell.setBackground(pressable(on ? Theme.withAlpha(theme.accent, 55) : Color.TRANSPARENT, 16, 0));
-            TextView ic = text((String) tile[0], 21, on ? theme.accent : theme.text);
+            cell.setPadding(dp(2), dp(8), dp(2), dp(8));
+            cell.setBackground(pressable(Color.TRANSPARENT, 16, 0));
+            TextView ic = text((String) tile[0], 20, theme.text);
             ic.setGravity(Gravity.CENTER);
-            cell.addView(ic, new LinearLayout.LayoutParams(dp(46), dp(40)));
+            ic.setBackground(shape(theme.surface, 16, 0));
+            cell.addView(ic, new LinearLayout.LayoutParams(dp(50), dp(50)));
             TextView lb = text((String) tile[1], 11, theme.muted);
             lb.setGravity(Gravity.CENTER);
             lb.setMaxLines(2);
-            cell.addView(lb, new LinearLayout.LayoutParams(-1, -2));
+            LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-1, -2);
+            ll.topMargin = dp(5);
+            cell.addView(lb, ll);
             onTap(cell, () -> {
-                if (holder[0] != null) holder[0].dismiss();
+                close.run();
                 ((Runnable) tile[2]).run();
             });
             row.addView(cell, new LinearLayout.LayoutParams(0, -2, 1));
@@ -2053,6 +2306,51 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         }
         holder[0] = sheet(body);
         holder[0].show();
+    }
+
+    private TextView stripButton(LinearLayout strip, String icon, String label, final boolean enabled, final Runnable action) {
+        LinearLayout cell = new LinearLayout(this);
+        cell.setOrientation(LinearLayout.VERTICAL);
+        cell.setGravity(Gravity.CENTER);
+        cell.setPadding(0, dp(4), 0, dp(4));
+        TextView ic = text(icon, 21, theme.text);
+        ic.setGravity(Gravity.CENTER);
+        GradientDrawable c = new GradientDrawable();
+        c.setShape(GradientDrawable.OVAL);
+        c.setColor(theme.surface);
+        ic.setBackground(c);
+        cell.addView(ic, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        TextView lb = text(label, 10, theme.muted);
+        lb.setGravity(Gravity.CENTER);
+        lb.setSingleLine(true);
+        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-2, -2);
+        ll.topMargin = dp(4);
+        cell.addView(lb, ll);
+        cell.setAlpha(enabled ? 1f : 0.35f);
+        if (enabled) onTap(cell, action);
+        strip.addView(cell, new LinearLayout.LayoutParams(0, -2, 1));
+        return ic;
+    }
+
+    private void toggleChip(LinearLayout chips, String icon, String label, boolean on, final Toggle toggle) {
+        final LinearLayout chip = new LinearLayout(this);
+        chip.setGravity(Gravity.CENTER_VERTICAL);
+        chip.setPadding(dp(12), 0, dp(14), 0);
+        final TextView ic = text(icon, 15, theme.text);
+        final TextView lb = bold(label, 12, theme.text);
+        lb.setPadding(dp(6), 0, 0, 0);
+        chip.addView(ic);
+        chip.addView(lb);
+        styleChip(chip, ic, lb, on);
+        onTap(chip, () -> styleChip(chip, ic, lb, toggle.run()));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(40));
+        lp.rightMargin = dp(8);
+        chips.addView(chip, lp);
+    }
+
+    private void styleChip(LinearLayout chip, TextView ic, TextView lb, boolean on) {
+        chip.setBackground(pressable(on ? Theme.withAlpha(theme.accent, 60) : theme.surface, 20, on ? theme.accent : 0));
+        lb.setTextColor(on ? theme.accent : theme.text);
     }
 
     private void exitBrowser() {
@@ -2199,7 +2497,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
     // ================================================================== tab switcher
 
     void showTabs() {
-        final Page page = new Page(I18n.t(incognito ? "Private tabs" : "Tabs") + " · " + tabs.size());
+        final Page page = new Page(I18n.t(incognito ? "Private tabs" : "Tabs") + " · " + tabs.size(), true);
         page.action("Close all", () -> new I18n.Builder(this).setTitle("Close all tabs?")
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Close all", (d, w) -> { page.dismiss(); closeAllTabs(); }).show());
@@ -2361,7 +2659,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(dp(18), dp(8), dp(18), dp(18));
-        final Dialog[] d = new Dialog[1];
+        final Sheet[] d = new Sheet[1];
 
         TextView brand = bold("⛨  ASTER SHIELDS", 12, theme.accent);
         brand.setLetterSpacing(0.15f);
@@ -2449,7 +2747,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         }));
     }
 
-    private void shieldToggle(LinearLayout body, String title, String subtitle, final String host, final String key, boolean def, final Dialog[] d) {
+    private void shieldToggle(LinearLayout body, String title, String subtitle, final String host, final String key, boolean def, final Sheet[] d) {
         LinearLayout row = rowCard(body, title, subtitle, null);
         Switch sw = new Switch(this);
         sw.setChecked(shields.siteFlag(host, key, def));
@@ -2498,7 +2796,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(dp(18), dp(8), dp(18), dp(18));
-        final Dialog[] d = new Dialog[1];
+        final Sheet[] d = new Sheet[1];
         TextView title = bold("⚡  GX CONTROL", 13, theme.accent);
         title.setLetterSpacing(0.15f);
         body.addView(title);
@@ -2607,7 +2905,7 @@ public class MainActivity extends Activity implements AsterWebView.Listener {
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(dp(16), dp(8), dp(16), dp(18));
-        final Dialog[] d = new Dialog[1];
+        final Sheet[] d = new Sheet[1];
         TextView title = bold("🎨  THEMES", 13, theme.accent);
         title.setLetterSpacing(0.15f);
         body.addView(title);

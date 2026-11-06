@@ -129,6 +129,8 @@ final class I18n {
 
         // ---- menu
         es("Bookmarks", "Marcadores");
+        es("Stop", "Detener");
+        es("Background play", "Segundo plano");
         es("History", "Historial");
         es("Downloads", "Descargas");
         es("Bookmark", "Guardar");
